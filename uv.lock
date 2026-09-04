@@ -641,6 +641,7 @@ dependencies = [
     { name = "ecomplexity" },
     { name = "marimo" },
     { name = "polars", extra = ["all"] },
+    { name = "pyiceberg" },
     { name = "pymcdm" },
     { name = "tablesleuth", extra = ["web"] },
 ]
@@ -651,6 +652,7 @@ requires-dist = [
     { name = "ecomplexity", specifier = ">=0.5.3" },
     { name = "marimo", specifier = ">=0.24.0" },
     { name = "polars", extras = ["all"], specifier = ">=1.44.1" },
+    { name = "pyiceberg", specifier = ">=0.12.0" },
     { name = "pymcdm", specifier = ">=1.4.0" },
     { name = "tablesleuth", extras = ["web"], specifier = ">=0.6.1" },
 ]
