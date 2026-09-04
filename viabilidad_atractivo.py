@@ -1,0 +1,2208 @@
+import marimo
+
+__generated_with = "0.24.0"
+app = marimo.App(width="medium")
+
+
+@app.cell
+def _():
+    import marimo as mo
+
+    return (mo,)
+
+
+@app.cell
+def _():
+    import polars as pl
+    import pandas as pd
+
+    return pd, pl
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Métricas de Viabilidad y Atractivo
+
+    **Attractiveness**:
+    - Capacidad para movilizar FDI (world and region) :rocket:
+    - ⁠Industry growth worldwide (past five years) :rocket:
+    - ⁠Industry growth worldwide (past five years-Atlas export growth) :rocket:
+    - ⁠Possibility to substitute US imports from Asia (China) :rocket:
+    - ⁠Capacity to create employment among specific groups (women, youth, low-skill) :rocket:
+
+    **Viability**:
+    - Strength in countries like Honduras (RCA in peer group)
+    - ⁠⁠Availability of inputs (doble razor, let us talk) :rocket:
+    - Reliance on a constraint or potential constraint (energy, security) :rocket:
+    - Reliance on a constraint or potential constraint (electricity-SCIAN México) :rocket:
+    - Institutional Intensity :rocket:
+    """)
+    return
+
+
+@app.cell
+def _():
+    ## Cargamos datos
+    produccion = {
+        "VAFC" : "Value added at factor costs",
+        "INGS" : "Total Purchases of goods and services",
+        "INEN" : "Purchases of energy products",
+        "PROD" : "Production",
+        "INGS" : "Total Purchases of goods and services",
+    }
+
+    empleo = {
+        "EMPN" : "Total employment (persons employed)",
+        "EMPF" : "Female employees",
+        "INEN" : "Purchases of energy products",
+        "VAPE" : "Labour productivity",
+        "EMPE" : "Employees",
+    }
+    return
+
+
+@app.cell
+def _(pd, pl):
+    ### Define consulta tipo lazy para el acceso a los datos
+    def obten_datos(dataset : str) -> pd.DataFrame: 
+        #q = pl.scan_csv('datos/viabilidad_atractivo/oecd_sbp_produccion_gasto_insumos.csv').select("ACTIVITY", "OBS_VALUE", "MEASURE", "TIME_PERIOD").group_by("ACTIVITY", "TIME_PERIOD", "MEASURE").sum()
+        q = pl.scan_delta(f'datos/{dataset}').select("ACTIVITY", "OBS_VALUE", "MEASURE", "TIME_PERIOD").group_by("ACTIVITY", "TIME_PERIOD", "MEASURE").sum()
+        ### Recolectamos la informacion
+        df = q.collect()
+
+        ### Lo convertimos a pandas
+        df = df.to_pandas()
+
+        ### Nos quedamos con las actividades a 4 digitos del CIIU
+        df = df[df["ACTIVITY"].apply(lambda x : len(x)==5)]
+
+        ### Define funcion que evalua si los últimos 4 caracteres son numéricos
+        test_numericos = lambda cadena : all([i.isnumeric() for i in list(cadena)])
+
+        df = df[df["ACTIVITY"].apply(lambda x : test_numericos(x[1:]))]
+
+        ### Obten seccion
+        df["ACTIVITY"] = df["ACTIVITY"].apply(lambda x : x[1:])
+
+        df = df.pivot(index=['TIME_PERIOD', 'ACTIVITY'], columns='MEASURE', values='OBS_VALUE')
+
+        return df.reset_index()
+
+    return (obten_datos,)
+
+
+@app.cell
+def _(obten_datos):
+    ### Cargamos datos de produccion
+    df_produccion = obten_datos("oecd_sbp_produccion_gasto_insumos")
+    df_produccion
+    return (df_produccion,)
+
+
+@app.cell
+def _(obten_datos):
+    ### Cargamos datos de empleo
+    df_empleo = obten_datos("oecd_sbp_empleo_energia")
+    df_empleo
+    return (df_empleo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Attractiveness
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Capacidad para movilizar FDI (world and region)
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Carga FDI
+    fdi = pl.read_delta("datos/fdi_subsectores_iso_code3").to_pandas()
+
+    ## Carga regiones 
+    regiones = pl.read_delta("datos/paises_iso_code").to_pandas()
+
+    ## Carga crosswalk de los subsectores fdi - CIIU
+    fdi_ciiu = pl.read_delta("datos/correspondencia_fdi_ciiu_rev4").to_pandas()
+    fdi_ciiu["CIIU"] = fdi_ciiu["CIIU"].apply(lambda x  : f"{x:04d}")
+
+    ## Agregamos regiones del mundo a datos de fdi
+    fdi  = fdi.merge(regiones[["iso_alpha_3", "un_sub_region"]], left_on="iso_code3", right_on="iso_alpha_3", how="left")
+    fdi["un_sub_region"] = fdi["un_sub_region"].fillna("Western Asia")
+
+    ## Cambiamos a entero el año de inicio del proyecto
+    fdi["Project date"] = fdi["Project date"].apply(lambda x : x.split("/")[-1]).astype(int)
+
+    ## Agregamos la correspondencia de actividad CIIU y subsector fdi
+    fdi = fdi.merge(fdi_ciiu[["Nombre fDi (Subsector)_duplicated_0", "CIIU"]], left_on="Sub-sector", right_on="Nombre fDi (Subsector)_duplicated_0", how="left")
+
+    ## Filtramos dataset a la región de LAC
+    fdi_lac = fdi.query("un_sub_region == 'Latin America and the Caribbean'")
+    return fdi, fdi_lac
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Agrupamos por actividad CIIU para tener el monto acumulado de inversión en capital y creacion de empleo entre 2019 y 2024
+    """)
+    return
+
+
+@app.cell
+def _(fdi, fdi_lac):
+    ## Agrupamos por actividad CIIU para tener el monto acumulado de inversión en capital y creacion de empleo entre 2019 y 2024
+    fdi_capital_investment = fdi[["CIIU", "Capital investment", "Jobs created"]].groupby("CIIU").sum().reset_index()
+    fdi_lac_capital_investment = fdi_lac[["CIIU", "Capital investment", "Jobs created"]].groupby("CIIU").sum().reset_index()
+    return fdi_capital_investment, fdi_lac_capital_investment
+
+
+@app.cell
+def _(fdi_capital_investment):
+    fdi_capital_investment
+    return
+
+
+@app.cell
+def _(fdi_lac_capital_investment):
+    fdi_lac_capital_investment
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Calculamos la tasa de crecimiento compuesta de la inversión entre 2019 y 2024 para cada industria
+    """)
+    return
+
+
+@app.cell
+def _(fdi, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en todo el mundo
+    fdi_cagr_investment = pl.from_pandas(fdi[["CIIU", "Project date", "Capital investment"]]).sort(
+        ["Project date", "CIIU"], maintain_order=True
+    ).group_by("Project date", "CIIU",maintain_order=True).sum().select(
+        pl.col("Project date", "CIIU", "Capital investment"),
+        pl.col("Capital investment").cum_sum().over("CIIU").alias("investment_cum_sum"),
+    ).group_by("CIIU", maintain_order=True).agg(
+            beginning_val = pl.col("investment_cum_sum").first(),
+            ending_val = pl.col("investment_cum_sum").last(),
+            n_years = pl.col("Project date").max() - pl.col("Project date").min(),
+        ).with_columns(
+        cagr_investment = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    fdi_cagr_investment
+    return (fdi_cagr_investment,)
+
+
+@app.cell
+def _(fdi_lac, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en lac
+    fdi_lac_cagr_investment = pl.from_pandas(fdi_lac[["CIIU", "Project date", "Capital investment"]]).sort(
+        ["Project date", "CIIU"], maintain_order=True
+    ).group_by("Project date", "CIIU",maintain_order=True).sum().select(
+        pl.col("Project date", "CIIU", "Capital investment"),
+        pl.col("Capital investment").cum_sum().over("CIIU").alias("investment_cum_sum"),
+    ).group_by("CIIU", maintain_order=True).agg(
+            beginning_val = pl.col("investment_cum_sum").first(),
+            ending_val = pl.col("investment_cum_sum").last(),
+            n_years = pl.col("Project date").max() - pl.col("Project date").min(),
+        ).with_columns(
+        cagr_investment = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    fdi_lac_cagr_investment
+    return (fdi_lac_cagr_investment,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Calculamos la tasa de crecimiento compuesta del empleo entre 2019 y 2024 para cada industria
+    """)
+    return
+
+
+@app.cell
+def _(fdi, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en todo el mundo
+    fdi_cagr_empleo = pl.from_pandas(fdi[["CIIU", "Project date", "Jobs created"]]).sort(
+        ["Project date", "CIIU"], maintain_order=True
+    ).group_by("Project date", "CIIU",maintain_order=True).sum().select(
+        pl.col("Project date", "CIIU", "Jobs created"),
+        pl.col("Jobs created").cum_sum().over("CIIU").alias("empleo_cum_sum"),
+    ).group_by("CIIU", maintain_order=True).agg(
+            beginning_val = pl.col("empleo_cum_sum").first(),
+            ending_val = pl.col("empleo_cum_sum").last(),
+            n_years = pl.col("Project date").max() - pl.col("Project date").min(),
+        ).with_columns(
+        cagr_empleo = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    fdi_cagr_empleo
+    return (fdi_cagr_empleo,)
+
+
+@app.cell
+def _(fdi_lac, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en lac
+    fdi_lac_cagr_empleo = pl.from_pandas(fdi_lac[["CIIU", "Project date", "Jobs created"]]).sort(
+        ["Project date", "CIIU"], maintain_order=True
+    ).group_by("Project date", "CIIU",maintain_order=True).sum().select(
+        pl.col("Project date", "CIIU", "Jobs created"),
+        pl.col("Jobs created").cum_sum().over("CIIU").alias("empleo_cum_sum"),
+    ).group_by("CIIU", maintain_order=True).agg(
+            beginning_val = pl.col("empleo_cum_sum").first(),
+            ending_val = pl.col("empleo_cum_sum").last(),
+            n_years = pl.col("Project date").max() - pl.col("Project date").min(),
+        ).with_columns(
+        cagr_empleo = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    fdi_lac_cagr_empleo
+    return (fdi_lac_cagr_empleo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    #### Calculamos la elasticidad del crecimiento del empleo al crecimiento de la inversión
+
+    Employment Elasticity of Growth
+
+    This measures how employment responds to changes in FDI in a specific sector. It tells you how much the sector's employment grows for every 1% increase in sectoral growth.
+
+    \begin{equation}
+    \text { Elasticity }(\epsilon)=\frac{\% \text { Change in Employment }}{\% \text { Change in FDI }}
+    \end{equation}
+
+    * If ε > 0 and < 1, the sector creates jobs but FDI is also rising.
+    * If ε > 1, the sector is highly labor-intensive and creates many jobs relative to FDI.
+
+    https://infonomics-society.org/wp-content/uploads/ijcdse/published-papers/volume-6-2015/Economic-Growth-and-Sectoral-Capacity-for-Employment.pdf
+    """)
+    return
+
+
+@app.cell
+def _(fdi_cagr_empleo, fdi_cagr_investment, pl):
+    elasticidad_empleo_fdi = fdi_cagr_investment.select("CIIU", "cagr_investment").join(
+        fdi_cagr_empleo.select("CIIU", "cagr_empleo"), 
+        on = "CIIU",
+    ).with_columns(
+        elasticidad = pl.col("cagr_empleo")/pl.col("cagr_investment")
+    )
+    elasticidad_empleo_fdi
+    return (elasticidad_empleo_fdi,)
+
+
+@app.cell
+def _(fdi_lac_cagr_empleo, fdi_lac_cagr_investment, pl):
+    elasticidad_lac_empleo_fdi = fdi_lac_cagr_investment.select("CIIU", "cagr_investment").join(
+        fdi_lac_cagr_empleo.select("CIIU", "cagr_empleo"), 
+        on = "CIIU",
+    ).with_columns(
+        elasticidad = pl.col("cagr_empleo")/pl.col("cagr_investment")
+    )
+    elasticidad_lac_empleo_fdi
+    return (elasticidad_lac_empleo_fdi,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Industry growth worldwide (past five years)
+
+    Calcularemos el crecimiento de la industria CIIU como el crecimiento en la producción.
+    """)
+    return
+
+
+@app.cell
+def _(df_produccion, pl):
+    industry_growth_rate = pl.from_pandas(
+        df_produccion[
+            ["TIME_PERIOD", "ACTIVITY", "PROD"]
+        ].query(
+            f"TIME_PERIOD in {[2018, 2019]}"
+        )
+    ).sort(
+        ["ACTIVITY", "TIME_PERIOD"]
+    ).group_by("ACTIVITY", maintain_order=True).agg(
+            beginning_val = pl.col("PROD").first(),
+            ending_val = pl.col("PROD").last(),
+            n_years = pl.col("TIME_PERIOD").max() - pl.col("TIME_PERIOD").min(),
+            #pl.col("PROD").pct_change().alias("Growth_Rate")
+        ).with_columns(
+        cagr_production = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    industry_growth_rate
+    return (industry_growth_rate,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### ⁠Industry growth worldwide (past five years-Atlas export growth)
+    Calcularemos el crecimiento de la industria CIIU al calcular el crecimiento en exportaciones de los productos que componen a cada industria.
+
+    De acuerdo a la metodología podemos descomponer la industria CIIU por los productos que la intengra, ponderado por el peso relativo de cada producto en la industria.
+
+    Con tales ponderadores podemos crear con los datos del Atlas de Complejidad Económica un indicador del crecimiento exportador de la industria en el mundo.
+
+    Aquí podemos usar la suma de exportaciones e importaciones para cuantificar una medida de comercio global.
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos datos del atlas
+    atlas_hs12 = pl.read_delta("datos/hs12_country_product_year_4")
+    atlas_hs12
+    return (atlas_hs12,)
+
+
+@app.cell
+def _(atlas_hs12, pl):
+    ## Valor de exportaciones de HS12 de 2012 a 2024
+    exportaciones_hs = atlas_hs12.group_by("product_hs12_code", "year").agg(
+        pl.col("export_value").sum()
+    ).filter(
+        pl.col("year").is_in([2019,2024])
+    )
+    exportaciones_hs
+    return (exportaciones_hs,)
+
+
+@app.cell
+def _(pl):
+    ## Cargamos crosswalk entre CIIU y HS12
+    ciiu_hs12 = pl.read_delta("datos/ponderadores_ciiu_hs12_concordance")
+    ciiu_hs12 = ciiu_hs12.filter(pl.col("weight")!='NA').with_columns(
+        pl.col("hs12").cast(pl.Int64), 
+        pl.col("weight").cast(pl.Float64), 
+    )
+    ciiu_hs12
+    return (ciiu_hs12,)
+
+
+@app.cell
+def _(ciiu_hs12, exportaciones_hs, pl):
+    ## Reunimos datos de exportaciones por producto HS12 y el crosswalk CIIU-HS12
+    industry_growth_rate_exports = exportaciones_hs.join(
+        ciiu_hs12, 
+        left_on="product_hs12_code", 
+        right_on="hs12"
+    ).with_columns(
+        (pl.col("export_value")*pl.col("weight")).alias("export_value")
+    ).group_by("ciiu", "year").agg(
+        pl.col("export_value").sum()
+    ).sort(
+        ["ciiu", "year"]
+    ).group_by("ciiu", maintain_order=True).agg(
+            beginning_val = pl.col("export_value").first(),
+            ending_val = pl.col("export_value").last(),
+            n_years = pl.col("year").max() - pl.col("year").min(),
+            #pl.col("PROD").pct_change().alias("Growth_Rate")
+        ).with_columns(
+        cagr_exports = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    industry_growth_rate_exports
+    return (industry_growth_rate_exports,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### ⁠Possibility to substitute US imports from Asia (China)
+
+    Usamos datos de atlas también. Pensemos un poco más como hacerlo.
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Carga datos
+    china_imports = pl.read_delta("datos/importaciones_usa_china_hs12").select("product_hs12_code", "share_imports_china")
+    china_imports
+    return (china_imports,)
+
+
+@app.cell
+def _(china_imports, ciiu_hs12, pl):
+    ### Reunimos datos de share import of china con la correspondencia CIIU y HS12
+    ciiu_china_intensiveness = ciiu_hs12.join(
+        china_imports, 
+        left_on="hs12", 
+        right_on="product_hs12_code"
+    ).group_by("ciiu").agg(
+        share_imports_china = (pl.col("share_imports_china") * pl.col("weight")).sum() / pl.col("weight").sum()
+    )
+    ciiu_china_intensiveness
+    return (ciiu_china_intensiveness,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Capacity to create employment among specific groups (women, youth, low-skill)
+
+    Employment Elasticity of Growth
+
+    This measures how employment responds to changes in economic output (GDP) in a specific sector. It tells you how much the sector's employment grows for every 1% increase in sectoral growth.
+
+    \begin{equation}
+    \text { Elasticity }(\epsilon)=\frac{\% \text { Change in Employment }}{\% \text { Change in Output }}
+    \end{equation}
+
+    * If ε > 0 and < 1, the sector creates jobs but productivity is also rising.
+    * If ε > 1, the sector is highly labor-intensive and creates many jobs relative to economic output.
+
+    https://infonomics-society.org/wp-content/uploads/ijcdse/published-papers/volume-6-2015/Economic-Growth-and-Sectoral-Capacity-for-Employment.pdf
+    """)
+    return
+
+
+@app.cell
+def _(df_empleo, pl):
+    employment_growth_rate = pl.from_pandas(
+        df_empleo[
+            ["TIME_PERIOD", "ACTIVITY", "EMPN"]
+        ].query(
+            f"TIME_PERIOD in {[2018, 2019]}"
+        )
+    ).sort(
+        ["ACTIVITY", "TIME_PERIOD"]
+    ).group_by("ACTIVITY", maintain_order=True).agg(
+            beginning_val = pl.col("EMPN").first(),
+            ending_val = pl.col("EMPN").last(),
+            n_years = pl.col("TIME_PERIOD").max() - pl.col("TIME_PERIOD").min(),
+            #pl.col("PROD").pct_change().alias("Growth_Rate")
+        ).with_columns(
+            cagr_employment = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    )
+
+    employment_growth_rate
+    return (employment_growth_rate,)
+
+
+@app.cell
+def _(employment_growth_rate, industry_growth_rate, pl):
+    employment_elasticity = industry_growth_rate.select(
+                                  "ACTIVITY", "cagr_production"
+                            ).join(
+                                employment_growth_rate.select(
+                                    "ACTIVITY", "cagr_employment"
+                                ), 
+                                on = "ACTIVITY"
+                            ).with_columns(
+                                elasticity = pl.col("cagr_employment")/pl.col("cagr_production")
+                            )
+    employment_elasticity
+    return (employment_elasticity,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Viability
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Strength in countries like Honduras (RCA in peer group)
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos datos de complejidad y nos quedamos con los registros de honduras
+    cdata = pl.read_delta("datos/cdata")
+
+    ## Analizamos solo los pares
+    ## Calculamos el rca promedio entre los pares
+    rca_peers = cdata.filter(
+        pl.col("REF_AREA").is_in(["SLV", "ECU"])
+    ).group_by("ACTIVITY").agg(
+        pl.col("rca").mean().alias("rca_peers")
+    ).rename({"ACTIVITY" : "ciiu"})
+
+    rca_peers
+    return cdata, rca_peers
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Availability of inputs (doble razor, let us talk)
+
+    Además de los datos del Atlas, usaremos los datos de [AI-generated Production Network - AIPNET](https://aipnet.io/) para identificar la cadena de producción de los productos.
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos cadena de producción de los productos hs12 de aipnet
+    aipnet = pl.read_delta("datos/aipnet_hs12_4d")
+    aipnet
+    return (aipnet,)
+
+
+@app.cell
+def _(aipnet, ciiu_hs12):
+    ## Reunimos datos de AIPNET con el crosswalk de CIIU-HS12
+    nodo_madre = "hs2012_code_upstream"
+    nodo_hijo = "hs2012_code_downstream"
+    aipnet_ciiu = aipnet.join(
+        ciiu_hs12, 
+        left_on=nodo_hijo,
+        right_on="hs12",
+    ).select(
+        "ciiu", "weight", nodo_hijo, nodo_madre
+    ).rename(
+        {
+            nodo_hijo : "hs12"
+        }
+    )
+    aipnet_ciiu
+    return aipnet_ciiu, nodo_madre
+
+
+@app.cell
+def _(ciiu_hs12):
+    ciiu_hs12
+    return
+
+
+@app.cell
+def _(atlas_hs12, pl):
+    ### Filtramos datos de HND
+    atlas_hs12_hnd = atlas_hs12.filter(
+        (pl.col("country_iso3_code")=="HND") &
+        (pl.col("year")==2024)
+    )
+    atlas_hs12_hnd
+    return (atlas_hs12_hnd,)
+
+
+@app.cell
+def _(aipnet_ciiu, atlas_hs12_hnd, nodo_madre, pl):
+    ## Creamos dataframe que contiene el porcentaje de insumos presentes para la producción del producto hs12
+    threshold_intensidad_importacion = 0.2 
+
+    aipnet_ciiu_razon_insumos = aipnet_ciiu.join(
+        atlas_hs12_hnd.select("product_hs12_code", "export_rca", "import_value"), 
+        left_on=nodo_madre, 
+        right_on="product_hs12_code", 
+        how = "left"
+    ).fill_null(0).with_columns(
+        ## Etiquetamos con 1 los productos que se exportan con ventaja comparativa
+        M = pl.when(
+            pl.col("export_rca")>=1
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            pl.lit(0)
+        ),
+        ## Calculamos el porcentaje de importación por producto que importa cada cada producto para el total de importación que implica su cadena de producción
+        razon_importacion = pl.col("import_value")/pl.col("import_value").sum().over("ciiu","hs12")
+    ).with_columns(
+        ## Variable que indica si el producto se importa con intensidad (el insumo representa el 20% de las importaciones totales con las que se produce el producto)
+        se_importa = pl.when(
+            pl.col("razon_importacion") >= threshold_intensidad_importacion
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            0
+        )
+    ).with_columns(
+        ## Un insumo está disponible por dos condiciones : 
+        ## 1) Lo exporta con ventaja comparativa o 
+        ## 2) lo importa con intensidad 
+        disponible = pl.when(
+            (pl.col("M")==1) | (pl.col("se_importa")==1)
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            pl.lit(0)
+        )
+    ).group_by("ciiu","hs12", "weight").agg(
+        pl.col("disponible").sum().alias("inputs_presentes"),
+        pl.col("disponible").count().alias("inputs_totales"),
+    ).with_columns(
+        razon_insumos_presentes = pl.col("inputs_presentes")/pl.col("inputs_totales")
+    ).with_columns(
+        weight__insumos_presentes = pl.col("weight")*pl.col("razon_insumos_presentes")
+    )
+    aipnet_ciiu_razon_insumos
+    return aipnet_ciiu_razon_insumos, threshold_intensidad_importacion
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(aipnet_ciiu_razon_insumos, pl):
+
+    ### Calculamos la razón de insumos presentes para cada industria CIIU
+    ciiu_insumos_presentes = aipnet_ciiu_razon_insumos.group_by(
+        "ciiu"
+    ).agg(
+        pl.col("weight__insumos_presentes").sum().alias("razon_insumos_presentes")
+    )
+    ciiu_insumos_presentes
+    return (ciiu_insumos_presentes,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reliance on a constraint or potential constraint (energy, security)
+    """)
+    return
+
+
+@app.cell
+def _(df_produccion, pl):
+    share_energy = pl.from_pandas(
+        df_produccion
+    ).filter(
+        TIME_PERIOD=2019
+    ).with_columns(
+        share_energy = pl.col("INEN")/pl.col("INGS")
+    ).select(
+        "ACTIVITY", "share_energy"
+    )
+    share_energy
+    return (share_energy,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Reliance on a constraint or potential constraint (electricity-SCIAN México)
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos crosswalk entre CIIU y NAICS
+    ciiu_naics = pl.read_delta("datos/ponderadores_ciiu_naics2017_concordance")
+    ciiu_naics
+    return (ciiu_naics,)
+
+
+@app.cell
+def _(pl):
+    ## Cargamos consumo de energia electrica
+    electricidad = pl.read_delta("datos/electricidad_saic_2003-2023").to_pandas()
+    electricidad["actividad"] = electricidad["actividad"].apply(lambda x : x.split()[1])
+
+    electricidad_colname = "K412A Gasto por consumo de energía eléctrica (millones de pesos)"
+    total_colname = "K000A Total de gastos por consumo de bienes y servicios (millones de pesos)"
+
+    electricidad["razon_electricidad_gasto_total"] = electricidad[electricidad_colname]/electricidad[total_colname]
+    electricidad = electricidad.drop(columns=[electricidad_colname, total_colname])
+    electricidad = electricidad.pivot(index="actividad", columns="anio", values="razon_electricidad_gasto_total").reset_index()
+    electricidad
+    return (electricidad,)
+
+
+@app.cell
+def _(electricidad, pl):
+    electricidad_share = pl.from_pandas(
+        electricidad[["actividad", 2023]].rename(
+            columns = {
+                2023 : "razon_electricidad_gasto_total", 
+                "actividad" : "naics"
+            }
+        )
+    ).with_columns(
+        pl.col("naics").cast(pl.Int32)
+    )
+    electricidad_share
+    return (electricidad_share,)
+
+
+@app.cell
+def _(ciiu_naics, electricidad_share, pl):
+    ### Reunimos razon de consumo de electricidad y el crosswalk CIIU-NAICS
+    ### y calculamos la media ponderada por industria CIIU
+    ciiu_razon_electricidad_gasto_total = ciiu_naics.join(
+        electricidad_share, 
+        on = "naics", 
+        how="left"
+    ).group_by("ciiu").agg(
+        razon_electricidad_gasto_total = (pl.col("razon_electricidad_gasto_total") * pl.col("weight")).sum() / pl.col("weight").sum()
+    )
+    ciiu_razon_electricidad_gasto_total
+    return (ciiu_razon_electricidad_gasto_total,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Institutional Intensity
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos correspondencia CIIU Rev 2 (3 Digitos) a CIIU Rev 4 (4 Dígitos)
+    cw_ciiu_rev_2_ciiu_rev_4 = pl.read_delta("datos/ciiu-rev-2_to_ciiu-rev-4")
+
+    ## Calculamos el peso relativo de la actividad CIIU Rev 4 (4 Dígitos) en las correspondencias totales de actividades CIIU Rev 2 (3 Digitos) para posteriormente usarlas como pesos en el cálculo de la media ponderada de la actividad
+    cw_ciiu_rev_2_ciiu_rev_4 = cw_ciiu_rev_2_ciiu_rev_4.with_columns(
+        ( 
+            pl.col("weight")/pl.col("weight").sum().over("ciiu4")
+        ).alias("composicion")
+    )
+
+    ## Cargamos Datos de Institutional Intensity en CIIU Rev 2 (3 Digitos)
+    inst_intensity = pl.read_delta("datos/institutional_intensity")
+
+    ### Reunimos el valor de institutional intensity y el crosswalk CIIU-Rev-2-CIIU-Rev-4
+    ### y calculamos la media ponderada por industria CIIU
+    df_institutional_intensity = cw_ciiu_rev_2_ciiu_rev_4.join(
+        inst_intensity.select("ISIC", "Institutional Intensity"), 
+        left_on="ciiu2", 
+        right_on="ISIC", 
+        how="left"
+    ).group_by("ciiu4").agg(
+            institutional_intensity = (pl.col("Institutional Intensity") * pl.col("composicion")).sum() / pl.col("composicion").sum()
+        ).rename(
+        {
+            "ciiu4" : "ciiu"
+        }
+        )
+
+    df_institutional_intensity
+    return (df_institutional_intensity,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Reunimos los datos
+    """)
+    return
+
+
+@app.cell
+def _(
+    ciiu_china_intensiveness,
+    ciiu_insumos_presentes,
+    ciiu_razon_electricidad_gasto_total,
+    elasticidad_empleo_fdi,
+    elasticidad_lac_empleo_fdi,
+    employment_elasticity,
+    fdi_cagr_investment,
+    fdi_capital_investment,
+    fdi_lac_cagr_investment,
+    fdi_lac_capital_investment,
+    industry_growth_rate,
+    industry_growth_rate_exports,
+    pl,
+    share_energy,
+):
+    # Attractiveness
+    ## Capacidad para movilizar FDI (world and region)
+    ###  Monto acumulado de inversión en capital y creacion de empleo entre 2019 y 2024
+    fdi_capital_investment_final = pl.from_pandas(fdi_capital_investment).select("CIIU", "Capital investment").rename({"CIIU":"ciiu", "Capital investment" : "cumulative_investment_world"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+    fdi_lac_capital_investment_final = pl.from_pandas(fdi_lac_capital_investment).select("CIIU", "Capital investment").rename({"CIIU":"ciiu", "Capital investment" : "cumulative_investment_lac"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ### Tasa de crecimiento compuesta de la inversión entre 2019 y 2024 para cada industria
+    fdi_cagr_investment_final = fdi_cagr_investment.select("CIIU", "cagr_investment").rename({"CIIU" : "ciiu", "cagr_investment" : "cagr_investment_world"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+    fdi_lac_cagr_investment_final = fdi_lac_cagr_investment.select("CIIU", "cagr_investment").rename({"CIIU" : "ciiu", "cagr_investment" : "cagr_investment_lac"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ### Elasticidad del crecimiento del empleo al crecimiento de FDI
+    elasticidad_empleo_fdi_final = elasticidad_empleo_fdi.select("CIIU", "elasticidad").rename({"CIIU" : "ciiu", "elasticidad" : "elasticidad_empleo_fdi_world"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+    elasticidad_lac_empleo_fdi_final = elasticidad_lac_empleo_fdi.select("CIIU", "elasticidad").rename({"CIIU" : "ciiu", "elasticidad" : "elasticidad_empleo_fdi_lac"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Industry growth worldwide (past five years)
+    industry_growth_rate_final = industry_growth_rate.select("ACTIVITY","cagr_production").rename({"ACTIVITY" : "ciiu"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Industry growth worldwide (past five years-Atlas export growth)
+    industry_growth_rate_exports_final = industry_growth_rate_exports.select("ciiu", "cagr_exports").with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Possibility to substitute US imports from Asia (China)
+    ciiu_china_intensiveness_final = ciiu_china_intensiveness.clone().with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Capacity to create employment among specific groups (women, youth, low-skill)
+    employment_elasticity_final = employment_elasticity.select("ACTIVITY", "elasticity").rename({"ACTIVITY" : "ciiu", "elasticity" : "elasticidad_empleo_producto"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    # Viability
+    ## Strength in countries like Honduras (RCA in peer group)
+    ## Availability of inputs (doble razor, let us talk)
+    ciiu_insumos_presentes_final = ciiu_insumos_presentes.clone().with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Reliance on a constraint or potential constraint (energy, security)
+    share_energy_final = share_energy.rename({"ACTIVITY" : "ciiu"}).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Reliance on a constraint or potential constraint (electricity-SCIAN México)
+    ciiu_razon_electricidad_gasto_total_final = ciiu_razon_electricidad_gasto_total.clone().with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+
+    ## Institutional Intensity
+    #df_institutional_intensity
+    return (
+        ciiu_china_intensiveness_final,
+        ciiu_insumos_presentes_final,
+        ciiu_razon_electricidad_gasto_total_final,
+        elasticidad_empleo_fdi_final,
+        elasticidad_lac_empleo_fdi_final,
+        employment_elasticity_final,
+        fdi_cagr_investment_final,
+        fdi_capital_investment_final,
+        fdi_lac_cagr_investment_final,
+        fdi_lac_capital_investment_final,
+        industry_growth_rate_exports_final,
+        industry_growth_rate_final,
+        share_energy_final,
+    )
+
+
+@app.cell
+def _(cdata):
+    ## Cargamos datos de complejidad y nos quedamos con los registros de honduras
+    cdata_hnd = cdata.filter(REF_AREA="HND")
+    cdata_hnd
+    return (cdata_hnd,)
+
+
+@app.cell
+def _(
+    cdata_hnd,
+    ciiu_china_intensiveness_final,
+    ciiu_insumos_presentes_final,
+    ciiu_razon_electricidad_gasto_total_final,
+    df_institutional_intensity,
+    elasticidad_empleo_fdi_final,
+    elasticidad_lac_empleo_fdi_final,
+    employment_elasticity_final,
+    fdi_cagr_investment_final,
+    fdi_capital_investment_final,
+    fdi_lac_cagr_investment_final,
+    fdi_lac_capital_investment_final,
+    industry_growth_rate_exports_final,
+    industry_growth_rate_final,
+    pl,
+    rca_peers,
+    share_energy_final,
+):
+    ## Obtenemos las actividades CIIU a analizar
+    ciiu_analiza = cdata_hnd.select("ACTIVITY").rename({"ACTIVITY" : "ciiu"})
+
+    ## Concatena con los indicadores calculados
+    factores = pl.concat(
+        [
+            ciiu_analiza, 
+            fdi_capital_investment_final,
+            fdi_lac_capital_investment_final,
+            fdi_cagr_investment_final,
+            fdi_lac_cagr_investment_final,
+            elasticidad_empleo_fdi_final,
+            elasticidad_lac_empleo_fdi_final,
+            industry_growth_rate_final,
+            industry_growth_rate_exports_final,
+            ciiu_china_intensiveness_final,
+            employment_elasticity_final,
+            rca_peers,
+            ciiu_insumos_presentes_final,
+            share_energy_final,
+            ciiu_razon_electricidad_gasto_total_final, 
+            df_institutional_intensity
+        ], how="align"
+    ).filter(
+        pl.col("ciiu").is_in(cdata_hnd["ACTIVITY"])
+    )
+    factores
+    return (factores,)
+
+
+@app.cell
+def _(factores, pd, pl):
+    ## Imputamos datos con Kmedias
+    from sklearn.impute import KNNImputer
+
+    # Initialize the imputer (setting K=2 neighbors)
+    imputer = KNNImputer(n_neighbors=2, weights="uniform")
+
+    # Fit and transform the data
+    factores_imputados = pl.from_pandas(
+        pd.DataFrame(imputer.fit_transform(factores.to_pandas()), columns=factores.columns)
+    )
+    factores_imputados
+    return factores_imputados, imputer
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # TOPSIS
+    """)
+    return
+
+
+@app.cell
+def _():
+    import numpy as np
+    from pymcdm.methods import TOPSIS
+    from pymcdm.helpers import rrankdata, normalize_matrix
+
+    return TOPSIS, np, rrankdata
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Viabilidad
+    """)
+    return
+
+
+@app.cell
+def _(TOPSIS, factores_imputados, np, rrankdata):
+    # TOPSIS atractivo
+    atractivo_factores = [
+        "cumulative_investment_world", 
+        "cumulative_investment_lac",
+        "cagr_investment_world",
+        "cagr_investment_lac",
+        "elasticidad_empleo_fdi_world",
+        "elasticidad_empleo_fdi_lac",
+        "cagr_production",
+        "cagr_exports",
+        "share_imports_china", 
+        "elasticidad_empleo_producto"
+    ]
+
+    alts_atractivo = factores_imputados.select(atractivo_factores).to_numpy()
+
+    # Define criteria weights (should sum up to 1)
+    weights_atractivo = np.array([1/len(atractivo_factores)]*len(atractivo_factores))
+
+    # Define criteria types (1 for profit, -1 for cost)
+    types_atractivo = np.array([1]*len(atractivo_factores))
+
+    # Create object of the method
+    # Note, that default normalization method for TOPSIS is minmax
+    topsis_atractivo = TOPSIS()
+
+    # Determine preferences and ranking for alternatives
+    pref_atractivo = topsis_atractivo(alts_atractivo, weights_atractivo, types_atractivo)
+    ranking_atractivo = rrankdata(pref_atractivo)
+
+    # If you want to inspect computation process in details
+    results_atractivo = topsis_atractivo(alts_atractivo, weights_atractivo, types_atractivo, verbose=True)
+    return pref_atractivo, topsis_atractivo
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Atractivo
+    """)
+    return
+
+
+@app.cell
+def _(TOPSIS, factores_imputados, np, rrankdata):
+    # TOPSIS Viabilidad
+    viabilidad_factores = [
+        "rca_peers",
+        "razon_insumos_presentes", 
+        "share_energy",
+        "razon_electricidad_gasto_total",
+        "institutional_intensity"
+    ]
+
+    alts_viabilidad = factores_imputados.select(viabilidad_factores).to_numpy()
+
+    # Define criteria weights (should sum up to 1)
+    weights_viabilidad = np.array([1/len(viabilidad_factores)]*len(viabilidad_factores))
+
+    # Define criteria types (1 for profit, -1 for cost)
+    types_viabilidad = np.array([1, 1, -1, -1, -1])
+
+    # Create object of the method
+    # Note, that default normalization method for TOPSIS is minmax
+    topsis_viabilidad = TOPSIS()
+
+    # Determine preferences and ranking for alternatives
+    pref_viabilidad = topsis_viabilidad(alts_viabilidad, weights_viabilidad, types_viabilidad)
+    ranking_viabilidad = rrankdata(pref_viabilidad)
+    return pref_viabilidad, topsis_viabilidad, viabilidad_factores
+
+
+@app.cell
+def _(factores_imputados, pl, pref_atractivo, pref_viabilidad):
+    ### Creamos data frame con los scores de viabilidad y atractivo
+    scores_viabilidad_atractivo = factores_imputados.select("ciiu").with_columns(
+            topsis_atractivo = pref_atractivo, 
+            topsis_viabilidad = pref_viabilidad, 
+    ).with_columns(
+        pl.col("ciiu").cast(pl.Int64)
+    )
+    scores_viabilidad_atractivo
+    return (scores_viabilidad_atractivo,)
+
+
+@app.cell
+def _(pd, pl):
+    # Cargamos recodificación
+    recod = pl.read_delta("datos/catalogo_ciiu_rev4_nombres").to_pandas()
+
+    ## Diccionario CIIU 4 a nombres
+    mapp_ciiu = pl.from_pandas(recod.query("clasificador=='ciiu_rev_4'")[["codigo", "nombre_actividad"]])
+
+    ### Cargamos selección de industrias de Pedro
+    ciiu_pedro_2 = pl.from_pandas(
+        pl.read_delta("datos/catalogo_ciiu_rev4").to_pandas().query("incluye==1")
+    )
+
+    ### Resultados finales Intensivo
+    #resultados_finales_intensivo = pd.read_excel("datos/viabilidad_atractivo/Resultados Complexity_final.xlsx", sheet_name="Intensivo")
+    resultados_finales_intensivo = pd.read_excel("datos/seleccion_final_complexity.xlsx", sheet_name="intensivo")
+
+    ### Resultados finales Extensivo
+    #resultados_finales_extensivo = pd.read_excel("datos/viabilidad_atractivo/Resultados Complexity_final.xlsx", sheet_name="Extensivo")
+    resultados_finales_extensivo = pd.read_excel("datos/seleccion_final_complexity.xlsx", sheet_name="extensivo")
+    return (
+        ciiu_pedro_2,
+        mapp_ciiu,
+        resultados_finales_extensivo,
+        resultados_finales_intensivo,
+    )
+
+
+@app.cell
+def _(resultados_finales_intensivo):
+    resultados_finales_intensivo
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Margen Intensivo
+    """)
+    return
+
+
+@app.cell
+def _(
+    cdata_hnd,
+    ciiu_pedro_2,
+    mapp_ciiu,
+    pd,
+    pl,
+    resultados_finales_intensivo,
+    scores_viabilidad_atractivo,
+):
+    import altair as alt 
+
+    color_cat = [
+      "C1 Manufactura avanzada y metalmecánica",
+      "C2 Química, materiales y farmacéutica",
+      "C3 Agroindustria y alimentos procesados",
+      "C4 Servicios empresariales intensivos en conocimiento (KIBS)",
+      "C5 Turismo, conectividad y logística",
+      "C6 Textiles, confección y materiales flexibles"
+    ]
+
+    color_hexa = ["#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F", "#EDC948"]
+
+    cdata_intensivo = cdata_hnd.filter(
+        (pl.col("REF_AREA")=="HND") & 
+        (pl.col("rca")>0)  
+        #(pl.col("mcp")==1)
+    )
+    cdata_intensivo = cdata_intensivo.join(
+        mapp_ciiu,
+        left_on="ACTIVITY", 
+        right_on="codigo"
+    ).join(
+        ciiu_pedro_2.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
+        left_on= "ACTIVITY", 
+        right_on = "clase_codigo"
+    )
+
+    cdata_intensivo = cdata_intensivo.join(
+        scores_viabilidad_atractivo, 
+        left_on="ACTIVITY", 
+        right_on="ciiu"
+    ).filter(
+        pl.col("ACTIVITY").is_in(resultados_finales_intensivo["ciiu4_cod"])
+    ).join(
+        pl.from_pandas(resultados_finales_intensivo[["Clusters", "ciiu4_cod"]]) , 
+        left_on="ACTIVITY", 
+        right_on="ciiu4_cod"
+    )
+
+    plot_intensivo = alt.Chart(
+        cdata_intensivo    
+    ).mark_circle(
+                opacity=0.99,
+                stroke='black',
+                strokeWidth=1.2,
+                strokeOpacity=0.9, 
+                size=180,     
+            ).encode(
+        x=alt.X('topsis_viabilidad').scale(zero=False).title("Viabilidad"),
+        y=alt.Y('topsis_atractivo').scale(zero=False).title("Atractivo"),#.scale(type ="log"),
+        color = alt.Color("Clusters", scale=alt.Scale(
+            domain=color_cat, 
+            range=color_hexa  
+        )).title("Cluster"),
+        #size = alt.Size("OBS_VALUE").scale(type ="log").title("Empleo"),
+        tooltip=[
+
+                alt.Tooltip('nombre_actividad', title='Actividad'), 
+                alt.Tooltip('division_titulo', title='División CIIU Rev 4'),
+                alt.Tooltip('OBS_VALUE', title='Empleo'),
+        ] 
+
+    )
+
+    # Create a horizontal line at y = -1.14
+    rule_atractivo = alt.Chart(pd.DataFrame({'y': [cdata_intensivo["topsis_atractivo"].mean()]})).mark_rule(color='gray', strokeDash=[4,4],  strokeWidth=3).encode(y='y:Q')
+    rule_viabilidad = alt.Chart(pd.DataFrame({'x': [cdata_intensivo["topsis_viabilidad"].mean()]})).mark_rule(color='gray', strokeDash=[4,4],  strokeWidth=3).encode(x='x:Q')
+
+    # 2. Quadrant labels dataframe with custom coordinates
+    # Change these values to position text exactly where you want it
+    quadrant_labels_intensivo = pd.DataFrame({
+        'y_pos': [cdata_intensivo["topsis_atractivo"].max(), 
+                  cdata_intensivo["topsis_atractivo"].min(), 
+                  cdata_intensivo["topsis_atractivo"].max(),
+                 cdata_intensivo["topsis_atractivo"].min()],     # X coordinates for text
+        'x_pos': [cdata_intensivo["topsis_viabilidad"].max()*0.95,
+                  cdata_intensivo["topsis_viabilidad"].max()*0.95,
+                  cdata_intensivo["topsis_viabilidad"].min()*1.05,
+                 cdata_intensivo["topsis_viabilidad"].min()*1.05],     # Y coordinates for text
+        'label': ['Fase I', 'Fase II', 'Fase III', 'Fase IV'],
+        'align': ['right', 'left', 'left', 'right'] # Optional: aligns text inside boundaries
+    })
+
+    # 5. Quadrant text layer
+    text_layer_intensivo = alt.Chart(quadrant_labels_intensivo).mark_text(
+        size=14,
+        fontStyle='bold',
+        color='black'
+    ).encode(
+        x='x_pos:Q',
+        y='y_pos:Q',
+        text='label:N'
+    )
+
+
+    (plot_intensivo + rule_atractivo + rule_viabilidad + text_layer_intensivo).properties(
+    #plot_intensivo.properties(
+            title=alt.TitleParams(
+                "Diagrama Viabilidad-Atractivo",
+                subtitle="Margen Intensivo",
+                subtitleColor="gray"
+            )
+    )
+    return alt, color_cat, color_hexa
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Margen Extensivo
+    """)
+    return
+
+
+@app.cell
+def _(
+    alt,
+    cdata_hnd,
+    ciiu_pedro_2,
+    color_cat,
+    color_hexa,
+    mapp_ciiu,
+    pd,
+    pl,
+    resultados_finales_extensivo,
+    scores_viabilidad_atractivo,
+):
+    cdata_extensivo = cdata_hnd.filter(
+        (pl.col("REF_AREA")=="HND") & 
+        #(pl.col("rca")>0) & 
+        (pl.col("mcp")==0)
+    )
+    cdata_extensivo = cdata_extensivo.join(
+        mapp_ciiu,
+        left_on="ACTIVITY", 
+        right_on="codigo"
+    ).join(
+        ciiu_pedro_2.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
+        left_on= "ACTIVITY", 
+        right_on = "clase_codigo"
+    )
+
+    cdata_extensivo = cdata_extensivo.join(
+        scores_viabilidad_atractivo, 
+        left_on="ACTIVITY", 
+        right_on="ciiu"
+    ).filter(
+        pl.col("ACTIVITY").is_in(resultados_finales_extensivo["ciiu4_cod"])
+    ).join(
+        pl.from_pandas(resultados_finales_extensivo[["Clusters", "ciiu4_cod"]]) , 
+        left_on="ACTIVITY", 
+        right_on="ciiu4_cod"
+    )
+
+
+    plot_extensivo = alt.Chart(
+        cdata_extensivo    
+    ).mark_circle(
+                opacity=0.99,
+                stroke='black',
+                strokeWidth=1.2,
+                strokeOpacity=0.9, 
+                size=180,     
+            ).encode(
+        x=alt.X('topsis_viabilidad').scale(zero=False).title("Viabilidad"),
+        y=alt.Y('topsis_atractivo').scale(zero=False).title("Atractivo"),#.scale(type ="log"),
+        color = alt.Color("Clusters", scale=alt.Scale(
+            domain=color_cat, 
+            range=color_hexa  
+        )).title("Cluster"),
+        #size = alt.Size("OBS_VALUE").scale(type ="log").title("Empleo"),
+        tooltip=[
+
+                alt.Tooltip('nombre_actividad', title='Actividad'), 
+                alt.Tooltip('division_titulo', title='División CIIU Rev 4'),
+                alt.Tooltip('OBS_VALUE', title='Empleo'),
+        ] 
+
+    )
+
+    # Create a horizontal line at y = -1.14
+    rule_extensivo_atractivo = alt.Chart(pd.DataFrame({'y': [cdata_extensivo["topsis_atractivo"].mean()]})).mark_rule(color='gray', strokeDash=[4,4],  strokeWidth=3).encode(y='y:Q')
+    rule_extensivo_viabilidad = alt.Chart(pd.DataFrame({'x': [cdata_extensivo["topsis_viabilidad"].mean()]})).mark_rule(color='gray', strokeDash=[4,4],  strokeWidth=3).encode(x='x:Q')
+
+    # 2. Quadrant labels dataframe with custom coordinates
+    # Change these values to position text exactly where you want it
+    quadrant_labels = pd.DataFrame({
+        'y_pos': [cdata_extensivo["topsis_atractivo"].max(), 
+                  cdata_extensivo["topsis_atractivo"].min(), 
+                  cdata_extensivo["topsis_atractivo"].max(),
+                 cdata_extensivo["topsis_atractivo"].min()],     # X coordinates for text
+        'x_pos': [cdata_extensivo["topsis_viabilidad"].max()*0.95,
+                  cdata_extensivo["topsis_viabilidad"].max()*0.95,
+                  cdata_extensivo["topsis_viabilidad"].min()*1.05,
+                 cdata_extensivo["topsis_viabilidad"].min()*1.05],     # Y coordinates for text
+        'label': ['Fase I', 'Fase II', 'Fase III', 'Fase IV'],
+        'align': ['right', 'left', 'left', 'right'] # Optional: aligns text inside boundaries
+    })
+
+    # 5. Quadrant text layer
+    text_layer = alt.Chart(quadrant_labels).mark_text(
+        size=14,
+        fontStyle='bold',
+        color='black'
+    ).encode(
+        x='x_pos:Q',
+        y='y_pos:Q',
+        text='label:N'
+    )
+
+    (plot_extensivo + rule_extensivo_atractivo + rule_extensivo_viabilidad + text_layer).properties(
+    #plot_intensivo.properties(
+            title=alt.TitleParams(
+                "Diagrama Viabilidad-Atractivo",
+                subtitle="Margen Extensivo",
+                subtitleColor="gray"
+            )
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Productos Textiles
+    ## Métricas de Viabilidad y Atractivo
+
+    **Attractiveness**:
+    - Capacidad para movilizar FDI (world and region) :rocket:
+    - ⁠Industry growth worldwide (past five years) :rocket:
+    - ⁠Industry growth worldwide (past five years-Atlas export growth) :rocket:
+    - ⁠Possibility to substitute US imports from Asia (China) :rocket:
+    - ⁠Capacity to create employment among specific groups (women, youth, low-skill) :rocket:
+
+    **Viability**:
+    - Strength in countries like Honduras (RCA in peer group)
+    - ⁠⁠Availability of inputs (doble razor, let us talk) :rocket:
+    - Reliance on a constraint or potential constraint (energy, security) :rocket:
+    - Reliance on a constraint or potential constraint (electricity-SCIAN México) :rocket:
+    - Institutional Intensity :rocket:
+    """)
+    return
+
+
+@app.cell
+def _(pl):
+    # Cargamos productos seleccionados de Textiles
+    textiles = pl.read_delta(
+                    "datos/productos_textiles"
+                ).with_columns(
+                    pl.col("HS12").cast(pl.String)
+                ).rename(
+                    {"HS12":"hs12"}
+                )
+    textiles
+    return (textiles,)
+
+
+@app.cell
+def _(pl):
+    # Cargamos CW de productos textiles
+    cw_textiles = pl.read_delta("datos/productos_textiles_cw_hs12_ciiu4")
+    cw_textiles
+    return (cw_textiles,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Attractiveness
+    """)
+    return
+
+
+@app.cell
+def _(cw_textiles, fdi_lac_capital_investment, pl):
+    ## Capacidad para movilizar FDI (LAC)
+    ## Agrupamos por actividad CIIU para tener el monto acumulado de inversión en capital y creacion de empleo entre 2019 y 2024
+    textiles_fdi_lac_capital_investment = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        pl.from_pandas(fdi_lac_capital_investment),
+        left_on="ISIC4", 
+        right_on="CIIU", 
+        how="left"
+    ).with_columns(
+        pl.col("Capital investment")*pl.col("weight"),
+        pl.col("Jobs created")*pl.col("weight"),
+    ).drop(
+        "ISIC4", "weight"
+    ).group_by("hs12").sum().with_columns(
+        pl.col("hs12").map_elements(lambda x : f"{x:04d}")
+    ).rename(
+        {"Capital investment" : "cumulative_investment_lac"}
+    )
+
+    textiles_fdi_lac_capital_investment
+    return (textiles_fdi_lac_capital_investment,)
+
+
+@app.cell
+def _(cw_textiles, fdi_lac_cagr_investment, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en todo el mundo
+    textiles_fdi_lac_cagr_investment = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        fdi_lac_cagr_investment,
+        left_on="ISIC4", 
+        right_on="CIIU", 
+        how="left"
+    ).with_columns(
+        pl.col("beginning_val")*pl.col("weight"),
+        pl.col("ending_val")*pl.col("weight"),
+    ).group_by("hs12").agg(
+        pl.col("beginning_val").sum(),  
+        pl.col("ending_val").sum(),  
+        (pl.col("n_years").sum()/pl.col("n_years").count()).alias("n_years")
+    ).fill_nan(0.0).with_columns(
+        cagr_investment = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    ).select("hs12", "cagr_investment").with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+
+
+    textiles_fdi_lac_cagr_investment
+    return (textiles_fdi_lac_cagr_investment,)
+
+
+@app.cell
+def _(cw_textiles, fdi_lac_cagr_empleo, pl):
+    ## Tasa de crecimiento compuesta para inversión de industrias en lac
+    textiles_fdi_lac_cagr_empleo = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        fdi_lac_cagr_empleo,
+        left_on="ISIC4", 
+        right_on="CIIU", 
+        how="left"
+    ).with_columns(
+        pl.col("beginning_val")*pl.col("weight"),
+        pl.col("ending_val")*pl.col("weight"),
+    ).group_by("hs12").agg(
+        pl.col("beginning_val").sum(),  
+        pl.col("ending_val").sum(),  
+        (pl.col("n_years").sum()/pl.col("n_years").count()).alias("n_years")
+    ).fill_nan(0.0).with_columns(
+        cagr_empleo = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    ).select("hs12", "cagr_empleo").with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+
+    textiles_fdi_lac_cagr_empleo 
+    return (textiles_fdi_lac_cagr_empleo,)
+
+
+@app.cell
+def _(pl, textiles_fdi_lac_cagr_empleo, textiles_fdi_lac_cagr_investment):
+    textiles_elasticidad_lac_empleo_fdi = textiles_fdi_lac_cagr_investment.select("hs12", "cagr_investment").join(
+        textiles_fdi_lac_cagr_empleo.select("hs12", "cagr_empleo"), 
+        on = "hs12",
+    ).with_columns(
+        elasticidad = pl.col("cagr_empleo")/pl.col("cagr_investment")
+    ).select("hs12", "elasticidad")
+    textiles_elasticidad_lac_empleo_fdi
+    return (textiles_elasticidad_lac_empleo_fdi,)
+
+
+@app.cell
+def _(cw_textiles, industry_growth_rate, pl):
+    ## ⁠Industry growth worldwide (past five years)
+    textiles_industry_growth_rate = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        industry_growth_rate.drop("cagr_production"),
+        left_on="ISIC4", 
+        right_on="ACTIVITY", 
+        how="left"
+    ).with_columns(
+        pl.col("beginning_val")*pl.col("weight"),
+        pl.col("ending_val")*pl.col("weight"),
+    ).group_by("hs12").agg(
+        pl.col("beginning_val").sum(),  
+        pl.col("ending_val").sum(),  
+        (pl.col("n_years").sum()/pl.col("n_years").count()).alias("n_years")
+    ).fill_nan(0.0).with_columns(
+        cagr_production = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    ).select("hs12", "cagr_production").with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+    textiles_industry_growth_rate
+    return (textiles_industry_growth_rate,)
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _(exportaciones_hs, pl):
+    ## ⁠Industry growth worldwide (past five years-Atlas export growth)
+    textiles_industry_growth_rate_exports = exportaciones_hs.sort(
+        ["product_hs12_code", "year"]
+    ).group_by("product_hs12_code", maintain_order=True).agg(
+            beginning_val = pl.col("export_value").first(),
+            ending_val = pl.col("export_value").last(),
+            n_years = pl.col("year").max() - pl.col("year").min(),
+            #pl.col("PROD").pct_change().alias("Growth_Rate")
+        ).with_columns(
+        cagr_exports = ((pl.col("ending_val") / pl.col("beginning_val")) ** (1 / pl.col("n_years")) - 1)*100
+    ).with_columns(
+        pl.col("product_hs12_code").map_elements(lambda x : f"{x:04d}")
+    ).rename(
+        {"product_hs12_code" : "hs12"}
+    ).select("hs12", "cagr_exports")
+    textiles_industry_growth_rate_exports
+    return (textiles_industry_growth_rate_exports,)
+
+
+@app.cell
+def _(china_imports, pl):
+    ## ⁠Possibility to substitute US imports from Asia (China) 
+    textiles_china_imports = china_imports.with_columns(
+        pl.col("product_hs12_code").map_elements(lambda x : f"{x:04d}")
+    ).rename(
+        {"product_hs12_code" : "hs12"}
+    )
+    textiles_china_imports
+    return (textiles_china_imports,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Viability
+    """)
+    return
+
+
+@app.cell
+def _(atlas_hs12, pl):
+    ## Strength in countries like Honduras (RCA in peer group)
+    import polars.selectors as cs
+
+    textiles_rca_peers = atlas_hs12.filter(
+        (pl.col("country_iso3_code").is_in(["HND", "SLV", "ECU"])) &
+        (pl.col("year")==2024)
+    ).select(
+        "product_hs12_code", "country_iso3_code", "export_rca"
+    ).fill_null(0).with_columns(
+        ## Etiquetamos con 1 los productos que se exportan con ventaja comparativa
+        M = pl.when(
+            pl.col("export_rca")>=1
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            pl.lit(0)
+        ),
+    ).pivot(
+        index="product_hs12_code",
+        on="country_iso3_code",
+        values="M",
+        aggregate_function="sum",
+    ).with_columns(
+        (
+             pl.sum_horizontal(["HND", "SLV", "ECU"]).alias("rca_peers") / 3   
+        )
+        , 
+        pl.col("product_hs12_code").map_elements(lambda x : f"{x:04d}")
+    ).rename(
+        {
+            "product_hs12_code" : "hs12"
+        }
+    ).select("hs12", "rca_peers")
+    textiles_rca_peers
+    return (textiles_rca_peers,)
+
+
+@app.cell
+def _(
+    aipnet_ciiu,
+    atlas_hs12_hnd,
+    nodo_madre,
+    pl,
+    threshold_intensidad_importacion,
+):
+    ## Availability of inputs
+    textiles_availability_inputs = aipnet_ciiu.drop("ciiu", "weight").join(
+        atlas_hs12_hnd.select("product_hs12_code", "export_rca", "import_value"), 
+        left_on=nodo_madre, 
+        right_on="product_hs12_code", 
+        how = "left"
+    ).fill_null(0).with_columns(
+        ## Etiquetamos con 1 los productos que se exportan con ventaja comparativa
+        M = pl.when(
+            pl.col("export_rca")>=1
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            pl.lit(0)
+        ),
+        ## Calculamos el porcentaje de importación por producto que importa cada cada producto para el total de importación que implica su cadena de producción
+        razon_importacion = pl.col("import_value")/pl.col("import_value").sum().over("hs12")
+    ).with_columns(
+        ## Variable que indica si el producto se importa con intensidad (el insumo representa el 20% de las importaciones totales con las que se produce el producto)
+        se_importa = pl.when(
+            pl.col("razon_importacion") >= threshold_intensidad_importacion
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            0
+        )
+    ).with_columns(
+        ## Un insumo está disponible por dos condiciones : 
+        ## 1) Lo exporta con ventaja comparativa o 
+        ## 2) lo importa con intensidad 
+        disponible = pl.when(
+            (pl.col("M")==1) | (pl.col("se_importa")==1)
+        ).then(
+            pl.lit(1)
+        ).otherwise(
+            pl.lit(0)
+        )
+    ).group_by("hs12").agg(
+        pl.col("disponible").sum().alias("inputs_presentes"),
+        pl.col("disponible").count().alias("inputs_totales"),
+    ).with_columns(
+        razon_insumos_presentes = pl.col("inputs_presentes")/pl.col("inputs_totales")
+    ).select("hs12", "razon_insumos_presentes").with_columns(
+        pl.col("hs12").map_elements(lambda x : f"{x:04d}")
+    )
+    textiles_availability_inputs
+    return (textiles_availability_inputs,)
+
+
+@app.cell
+def _(cw_textiles, pl, share_energy):
+    ## Reliance on a constraint or potential constraint (energy, security)
+    textiles_share_energy = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        share_energy,
+        left_on="ISIC4", 
+        right_on="ACTIVITY", 
+        how="left"
+    ).group_by("hs12").agg(
+                share_energy = (pl.col("share_energy") * pl.col("weight")).sum() / pl.col("weight").sum()
+    ).with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+
+    textiles_share_energy
+    return (textiles_share_energy,)
+
+
+@app.cell
+def _(ciiu_razon_electricidad_gasto_total, cw_textiles, pl):
+    ## Reliance on a constraint or potential constraint (electricity-SCIAN México)
+    textiles_ciiu_razon_electricidad_gasto_total = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        ciiu_razon_electricidad_gasto_total.with_columns(
+            pl.col("ciiu").cast(pl.String)
+        ),
+        left_on="ISIC4", 
+        right_on="ciiu", 
+        how="left"
+    ).group_by("hs12").agg(
+                razon_electricidad_gasto_total = (pl.col("razon_electricidad_gasto_total") * pl.col("weight")).sum() / pl.col("weight").sum()
+    ).with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+    textiles_ciiu_razon_electricidad_gasto_total
+    return (textiles_ciiu_razon_electricidad_gasto_total,)
+
+
+@app.cell
+def _(cw_textiles, df_institutional_intensity, pl):
+    ## Institutional Intensity
+    textiles_df_institutional_intensity = cw_textiles.with_columns(
+        pl.col("ISIC4").cast(pl.String)
+    ).join(
+        df_institutional_intensity.with_columns(
+            pl.col("ciiu").cast(pl.String)
+        ),
+        left_on="ISIC4", 
+        right_on="ciiu", 
+        how="left"
+    ).group_by("hs12").agg(
+                institutional_intensity = (pl.col("institutional_intensity") * pl.col("weight")).sum() / pl.col("weight").sum()
+    ).with_columns(
+        pl.col("hs12").cast(pl.String)
+    )
+    textiles_df_institutional_intensity
+    return (textiles_df_institutional_intensity,)
+
+
+@app.cell
+def _(
+    imputer,
+    pd,
+    pl,
+    textiles,
+    textiles_availability_inputs,
+    textiles_china_imports,
+    textiles_ciiu_razon_electricidad_gasto_total,
+    textiles_df_institutional_intensity,
+    textiles_elasticidad_lac_empleo_fdi,
+    textiles_fdi_lac_cagr_empleo,
+    textiles_fdi_lac_cagr_investment,
+    textiles_fdi_lac_capital_investment,
+    textiles_industry_growth_rate,
+    textiles_industry_growth_rate_exports,
+    textiles_rca_peers,
+    textiles_share_energy,
+):
+    ## Consolidamos tablas
+
+    textiles_consolida = pl.concat([
+        textiles_fdi_lac_capital_investment, 
+        textiles_fdi_lac_cagr_investment, 
+        textiles_fdi_lac_cagr_empleo,
+        textiles_elasticidad_lac_empleo_fdi, 
+        textiles_industry_growth_rate, 
+        textiles_industry_growth_rate_exports, 
+        textiles_china_imports, 
+        textiles_rca_peers, 
+        textiles_availability_inputs, 
+        textiles_share_energy, 
+        textiles_ciiu_razon_electricidad_gasto_total, 
+        textiles_df_institutional_intensity
+    ],  how = "align")
+
+    textiles_factores = textiles.join(
+        textiles_consolida, 
+        on = "hs12",
+        how = "inner"
+    ).with_columns(
+        pl.col("hs12").cast(pl.Int32)
+    ).drop("Actividad")
+
+    ## Imputamos datos con Kmedias
+    # Fit and transform the data
+    textiles_factores_imputados = pl.from_pandas(
+        pd.DataFrame(imputer.fit_transform(textiles_factores.to_pandas()), columns=textiles_factores.columns)
+    )
+    textiles_factores_imputados
+
+    textiles_factores_imputados
+    return (textiles_factores_imputados,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    # Topsis Textiles
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Atractivo
+    """)
+    return
+
+
+@app.cell
+def _(TOPSIS, np, rrankdata, textiles_factores_imputados, topsis_atractivo):
+    # TOPSIS atractivo
+    textiles_atractivo_factores = [
+        "cumulative_investment_lac",
+        "cagr_investment",
+        "elasticidad",
+        "cagr_production",
+        "cagr_exports",
+        "share_imports_china", 
+    ]
+    textiles_alts_atractivo = textiles_factores_imputados.select(textiles_atractivo_factores).to_numpy()
+
+    # Define criteria weights (should sum up to 1)
+    textiles_weights_atractivo = np.array([1/len(textiles_atractivo_factores)]*len(textiles_atractivo_factores))
+
+    # Define criteria types (1 for profit, -1 for cost)
+    textiles_types_atractivo = np.array([1]*len(textiles_atractivo_factores))
+
+    # Create object of the method
+    # Note, that default normalization method for TOPSIS is minmax
+    textiles_topsis_atractivo = TOPSIS()
+
+    # Determine preferences and ranking for alternatives
+    textiles_pref_atractivo = topsis_atractivo(textiles_alts_atractivo, textiles_weights_atractivo, textiles_types_atractivo)
+    textiles_ranking_atractivo = rrankdata(textiles_pref_atractivo)
+
+    # If you want to inspect computation process in details
+    textiles_results_atractivo = topsis_atractivo(textiles_alts_atractivo, textiles_weights_atractivo, textiles_types_atractivo, verbose=True)
+    return (textiles_pref_atractivo,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Viabilidad
+    """)
+    return
+
+
+@app.cell
+def _(
+    TOPSIS,
+    np,
+    rrankdata,
+    textiles_factores_imputados,
+    topsis_viabilidad,
+    viabilidad_factores,
+):
+    # TOPSIS Viabilidad
+    textiles_viabilidad_factores = [
+        "rca_peers",
+        "razon_insumos_presentes", 
+        "share_energy",
+        "razon_electricidad_gasto_total",
+        "institutional_intensity"
+    ]
+
+
+    textiles_alts_viabilidad = textiles_factores_imputados.select(viabilidad_factores).to_numpy()
+
+    # Define criteria weights (should sum up to 1)
+    textiles_weights_viabilidad = np.array([1/len(textiles_viabilidad_factores)]*len(textiles_viabilidad_factores))
+
+    # Define criteria types (1 for profit, -1 for cost)
+    textiles_types_viabilidad = np.array([1, 1, -1, -1, -1])
+
+    # Create object of the method
+    # Note, that default normalization method for TOPSIS is minmax
+    textiles_topsis_viabilidad = TOPSIS()
+
+    # Determine preferences and ranking for alternatives
+    textiles_pref_viabilidad = topsis_viabilidad(textiles_alts_viabilidad, textiles_weights_viabilidad, textiles_types_viabilidad)
+    textiles_ranking_viabilidad = rrankdata(textiles_pref_viabilidad)
+    return (textiles_pref_viabilidad,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Complejidad
+    """)
+    return
+
+
+@app.cell
+def _(TOPSIS, np, rrankdata, textiles_factores_imputados):
+    # TOPSIS Complejidad
+    complejidad_factores = [
+        "Distance",
+        "PCI", 
+        "Opportunity Gain"
+    ]
+
+
+    textiles_alts_complejidad = textiles_factores_imputados.select(complejidad_factores).to_numpy()
+
+    # Define criteria weights (should sum up to 1)
+    textiles_weights_complejidad = np.array([1/len(complejidad_factores)]*len(complejidad_factores))
+
+    # Define criteria types (1 for profit, -1 for cost)
+    textiles_types_complejidad = np.array([-1, 1, 1])
+
+    # Create object of the method
+    # Note, that default normalization method for TOPSIS is minmax
+    textiles_topsis_complejidad = TOPSIS()
+
+    # Determine preferences and ranking for alternatives
+    textiles_pref_complejidad = textiles_topsis_complejidad(textiles_alts_complejidad, textiles_weights_complejidad, textiles_types_complejidad)
+    textiles_ranking_complejidad = rrankdata(textiles_pref_complejidad)
+    return (textiles_pref_complejidad,)
+
+
+@app.cell
+def _(
+    pl,
+    textiles,
+    textiles_factores_imputados,
+    textiles_pref_atractivo,
+    textiles_pref_complejidad,
+    textiles_pref_viabilidad,
+):
+    ### Creamos data frame con los scores de viabilidad y atractivo
+    textiles_scores_viabilidad_atractivo = textiles_factores_imputados.select(
+        "hs12"
+        ).with_columns(
+            pl.col("hs12").cast(pl.Int32).cast(pl.String)
+        ).join(
+        textiles.select("hs12", "Actividad"),
+        on = "hs12"
+
+    ).with_columns(
+            topsis_atractivo = textiles_pref_atractivo, 
+            topsis_viabilidad = textiles_pref_viabilidad,
+            topsis_complejidad = textiles_pref_complejidad
+    )
+    textiles_scores_viabilidad_atractivo
+    return (textiles_scores_viabilidad_atractivo,)
+
+
+@app.cell
+def _(textiles_scores_viabilidad_atractivo):
+    textiles_scores_viabilidad_atractivo.sort(["topsis_complejidad", "topsis_viabilidad", "topsis_atractivo"], descending = True)
+    return
+
+
+@app.cell
+def _(pl):
+    ## Cargamos productos HS12
+    productos_hs12 = pl.read_delta("datos/product_hs12")
+    productos_hs12
+    return (productos_hs12,)
+
+
+@app.cell
+def _(
+    pl,
+    productos_hs12,
+    textiles,
+    textiles_factores_imputados,
+    textiles_pref_complejidad,
+):
+    ## Guardamos factores imputados con topsis de complejidad
+
+    textiles_factores_imputados_topsis_complejidad = textiles_factores_imputados.with_columns(
+        topsis_complejidad = textiles_pref_complejidad
+    )
+    textiles_factores_imputados_topsis_complejidad = textiles_factores_imputados_topsis_complejidad.with_columns(
+        pl.col("hs12").map_elements(lambda x : str(x)[:2]).alias("hs_12_2d").cast(pl.Int32)
+    ).join(
+        productos_hs12.select("product_name_short", "product_hs12_code"), 
+        left_on="hs_12_2d", 
+        right_on="product_hs12_code"
+    )
+    textiles_factores_imputados_topsis_complejidad = textiles_factores_imputados_topsis_complejidad.with_columns(
+        pl.col("hs12").cast(pl.Int32).cast(pl.String)
+    ).join(
+            textiles.select("hs12", "Actividad"),
+            on = "hs12"
+        )
+    textiles_factores_imputados_topsis_complejidad
+    return (textiles_factores_imputados_topsis_complejidad,)
+
+
+@app.cell
+def _():
+    #textiles_factores_imputados_topsis_complejidad.write_csv("/home/milo/Documents/egtp/iniciativas/priorizacion_hnd/datos/textiles_factores_topsis_complejidad.csv")
+    return
+
+
+@app.cell
+def _(TOPSIS, np, pd, pl, rrankdata):
+    def textiles_topsis_viabilidad_atractivo(
+        data : pd.DataFrame, 
+        top_n : int
+        ) -> pl.DataFrame:
+
+        data = data.sort("topsis_complejidad", descending=True).head(top_n)
+
+        # TOPSIS atractivo
+        textiles_atractivo_factores = [
+            "cumulative_investment_lac",
+            "cagr_investment",
+            "elasticidad",
+            "cagr_production",
+            "cagr_exports",
+            "share_imports_china", 
+        ]
+        textiles_alts_atractivo = data.select(textiles_atractivo_factores).to_numpy()
+
+        # Define criteria weights (should sum up to 1)
+        textiles_weights_atractivo = np.array([1/len(textiles_atractivo_factores)]*len(textiles_atractivo_factores))
+
+        # Define criteria types (1 for profit, -1 for cost)
+        textiles_types_atractivo = np.array([1]*len(textiles_atractivo_factores))
+
+        # Create object of the method
+        # Note, that default normalization method for TOPSIS is minmax
+        textiles_topsis_atractivo = TOPSIS()
+
+        # Determine preferences and ranking for alternatives
+        textiles_pref_atractivo = textiles_topsis_atractivo(textiles_alts_atractivo, textiles_weights_atractivo, textiles_types_atractivo)
+        textiles_ranking_atractivo = rrankdata(textiles_pref_atractivo)
+
+        # If you want to inspect computation process in details
+        textiles_results_atractivo = textiles_topsis_atractivo(textiles_alts_atractivo, textiles_weights_atractivo, textiles_types_atractivo, verbose=True)
+
+        # TOPSIS Viabilidad
+        textiles_viabilidad_factores = [
+            "rca_peers",
+            "razon_insumos_presentes", 
+            #"share_energy",
+            "razon_electricidad_gasto_total",
+            "institutional_intensity"
+        ]
+
+
+        textiles_alts_viabilidad = data.select(textiles_viabilidad_factores).to_numpy()
+
+        # Define criteria weights (should sum up to 1)
+        textiles_weights_viabilidad = np.array([1/len(textiles_viabilidad_factores)]*len(textiles_viabilidad_factores))
+
+        # Define criteria types (1 for profit, -1 for cost)
+        textiles_types_viabilidad = np.array([1, 1, -1, -1])
+
+        # Create object of the method
+        # Note, that default normalization method for TOPSIS is minmax
+        textiles_topsis_viabilidad = TOPSIS()
+
+        # Determine preferences and ranking for alternatives
+        textiles_pref_viabilidad = textiles_topsis_viabilidad(textiles_alts_viabilidad, textiles_weights_viabilidad, textiles_types_viabilidad)
+        textiles_ranking_viabilidad = rrankdata(textiles_pref_viabilidad)
+
+        ### Creamos data frame con los scores de viabilidad y atractivo
+        data = data.select(
+            "hs12"
+            ).with_columns(
+                pl.col("hs12").cast(pl.Int32).cast(pl.String)
+            ).with_columns(
+                topsis_atractivo = textiles_pref_atractivo, 
+                topsis_viabilidad = textiles_pref_viabilidad,
+                topsis_complejidad = data["topsis_complejidad"],
+                cluster = data["product_name_short"], 
+                Actividad = data["Actividad"]
+        )
+
+        return data
+
+    return (textiles_topsis_viabilidad_atractivo,)
+
+
+@app.cell
+def _(mo):
+    dropdown = mo.ui.dropdown(options=[10, 15, 20], value=10, label="Escoge Top")
+    dropdown
+    return (dropdown,)
+
+
+@app.cell
+def _(
+    alt,
+    dropdown,
+    pd,
+    textiles_factores_imputados_topsis_complejidad,
+    textiles_topsis_viabilidad_atractivo,
+):
+    textiles_topsis = textiles_topsis_viabilidad_atractivo(textiles_factores_imputados_topsis_complejidad, dropdown.value)
+
+    plot_textiles = alt.Chart(
+            textiles_topsis
+            ).mark_circle(
+                opacity=0.99,
+                stroke='black',
+                strokeWidth=1.2,
+                strokeOpacity=0.9, 
+                size=180,     
+            ).encode(
+        y=alt.Y('topsis_atractivo').scale(zero=False).title("Atractivo"),
+        x=alt.X('topsis_viabilidad').scale(zero=False).title("Viabilidad"),#.scale(type ="log"),
+        color = alt.Color("cluster").title("Cluster"),
+        #size = alt.Size("topsis_atractivo"),
+        tooltip=[
+
+                alt.Tooltip('Actividad', title='Actividad'), 
+        ] 
+    ).properties(
+        title=alt.TitleParams(
+            "Diagrama Complejidad-Viabilidad-Atractivo",
+            #subtitle="Honduras. Datos de Empleo de OECD SBS 2019",
+            subtitleColor="gray"
+        )
+    )
+
+    # Create a horizontal line at y = -1.14
+    textiles_rule_atractivo = alt.Chart(pd.DataFrame({'y': [textiles_topsis["topsis_atractivo"].mean()]})).mark_rule(color='gray', strokeWidth=3, strokeDash=[4,4]).encode(y='y:Q')
+    textiles_rule_viabilidad = alt.Chart(pd.DataFrame({'x': [textiles_topsis["topsis_viabilidad"].mean()]})).mark_rule(color='gray', strokeWidth=3, strokeDash=[4,4]).encode(x='x:Q')
+
+    # 2. Quadrant labels dataframe with custom coordinates
+    # Change these values to position text exactly where you want it
+    textiles_quadrant_labels = pd.DataFrame({
+        'y_pos': [textiles_topsis["topsis_atractivo"].max(), 
+                textiles_topsis["topsis_atractivo"].min()*1.05, 
+                textiles_topsis["topsis_atractivo"].max(),
+                textiles_topsis["topsis_atractivo"].min()*1.05],     # X coordinates for text
+        'x_pos': [textiles_topsis["topsis_viabilidad"].max()*0.95,
+                textiles_topsis["topsis_viabilidad"].max()*0.95,
+                textiles_topsis["topsis_viabilidad"].min()*1.05,
+                textiles_topsis["topsis_viabilidad"].min()*1.05],     # Y coordinates for text
+        'label': ['Fase I', 'Fase II', 'Fase III', 'Fase IV'],
+        'align': ['right', 'left', 'left', 'right'] # Optional: aligns text inside boundaries
+    })
+
+    # 5. Quadrant text layer
+    textiles_text_layer = alt.Chart(textiles_quadrant_labels).mark_text(
+        size=16,
+        fontStyle='bold',
+        color='black'
+    ).encode(
+        x='x_pos:Q',
+        y='y_pos:Q',
+        text='label:N'
+    )
+
+    plot_textiles = (plot_textiles + textiles_rule_atractivo + textiles_rule_viabilidad + textiles_text_layer).properties(
+    #plot_intensivo.properties(
+            title=alt.TitleParams(
+                "Diagrama Viabilidad-Atractivo",
+                subtitle="Productos Textiles",
+                subtitleColor="gray"
+            )
+    )
+    plot_textiles
+    return
+
+
+if __name__ == "__main__":
+    app.run()
