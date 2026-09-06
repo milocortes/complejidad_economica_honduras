@@ -16,9 +16,13 @@ El proyecto utiliza [uv](https://docs.astral.sh/uv/) como administrador de proye
 
 Sincronizamos las dependencias en nuestro ambiente virtual con la instrucción:
 
+
 ```bash 
 uv sync
 ```
+
+> [!NOTE]
+>
 >Sincronizar (Syncing) es el proceso de instalar las versiones correctas de las dependencias de un lockfile en el ambiente del proyecto.
 
 ## Replicación de programas
