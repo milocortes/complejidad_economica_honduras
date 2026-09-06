@@ -15,8 +15,38 @@ def _():
 def _():
     import polars as pl
     import pandas as pd
+    from pyiceberg.catalog import load_catalog
 
-    return pd, pl
+    return load_catalog, pd, pl
+
+
+@app.cell
+def _(load_catalog):
+    ### Instancia Catálogo
+    warehouse_path = "warehouse"
+
+    catalog = load_catalog(
+        "default",
+        **{
+            'type': 'sql',
+            "uri": f"sqlite:///{warehouse_path}/pyiceberg_catalog.db",
+            "warehouse": f"{warehouse_path}",
+        },
+    )
+    return (catalog,)
+
+
+@app.cell
+def _(catalog, pl):
+    ### Función que carga tabla de Apache Iceberg
+    def load_table(
+        namespace : str, 
+        table : str
+        ) -> pl.DataFrame:
+        return catalog.load_table(f"{namespace}.{table}").to_polars().collect()
+
+
+    return (load_table,)
 
 
 @app.cell(hide_code=True)
@@ -125,15 +155,15 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Carga FDI
-    fdi = pl.read_delta("datos/fdi_subsectores_iso_code3").to_pandas()
+    fdi = load_table("diccionarios", "fdi_subsectores_iso_code3").to_pandas()
 
     ## Carga regiones 
-    regiones = pl.read_delta("datos/paises_iso_code").to_pandas()
+    regiones = load_table("diccionarios", "paises_iso_code").to_pandas()
 
     ## Carga crosswalk de los subsectores fdi - CIIU
-    fdi_ciiu = pl.read_delta("datos/correspondencia_fdi_ciiu_rev4").to_pandas()
+    fdi_ciiu = load_table("diccionarios", "correspondencia_fdi_ciiu_rev4").to_pandas()
     fdi_ciiu["CIIU"] = fdi_ciiu["CIIU"].apply(lambda x  : f"{x:04d}")
 
     ## Agregamos regiones del mundo a datos de fdi
@@ -369,9 +399,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Cargamos datos del atlas
-    atlas_hs12 = pl.read_delta("datos/hs12_country_product_year_4")
+    atlas_hs12 = load_table("complejidad", "hs12_country_product_year_4")
     atlas_hs12
     return (atlas_hs12,)
 
@@ -389,9 +419,9 @@ def _(atlas_hs12, pl):
 
 
 @app.cell
-def _(pl):
+def _(load_table, pl):
     ## Cargamos crosswalk entre CIIU y HS12
-    ciiu_hs12 = pl.read_delta("datos/ponderadores_ciiu_hs12_concordance")
+    ciiu_hs12 = load_table("diccionarios", "ponderadores_ciiu_hs12_concordance")
     ciiu_hs12 = ciiu_hs12.filter(pl.col("weight")!='NA').with_columns(
         pl.col("hs12").cast(pl.Int64), 
         pl.col("weight").cast(pl.Float64), 
@@ -437,9 +467,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Carga datos
-    china_imports = pl.read_delta("datos/importaciones_usa_china_hs12").select("product_hs12_code", "share_imports_china")
+    china_imports = load_table("viabilidad_atractivo", "importaciones_usa_china_hs12").select("product_hs12_code", "share_imports_china")
     china_imports
     return (china_imports,)
 
@@ -535,9 +565,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table, pl):
     ## Cargamos datos de complejidad y nos quedamos con los registros de honduras
-    cdata = pl.read_delta("datos/cdata")
+    cdata = load_table("complejidad", "cdata")
 
     ## Analizamos solo los pares
     ## Calculamos el rca promedio entre los pares
@@ -562,9 +592,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Cargamos cadena de producción de los productos hs12 de aipnet
-    aipnet = pl.read_delta("datos/aipnet_hs12_4d")
+    aipnet = load_table("viabilidad_atractivo", "aipnet_hs12_4d")
     aipnet
     return (aipnet,)
 
@@ -714,17 +744,17 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Cargamos crosswalk entre CIIU y NAICS
-    ciiu_naics = pl.read_delta("datos/ponderadores_ciiu_naics2017_concordance")
+    ciiu_naics = load_table("diccionarios", "ponderadores_ciiu_naics2017_concordance")
     ciiu_naics
     return (ciiu_naics,)
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Cargamos consumo de energia electrica
-    electricidad = pl.read_delta("datos/electricidad_saic_2003-2023").to_pandas()
+    electricidad = load_table("viabilidad_atractivo", "electricidad_saic_2003-2023").to_pandas()
     electricidad["actividad"] = electricidad["actividad"].apply(lambda x : x.split()[1])
 
     electricidad_colname = "K412A Gasto por consumo de energía eléctrica (millones de pesos)"
@@ -777,9 +807,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table, pl):
     ## Cargamos correspondencia CIIU Rev 2 (3 Digitos) a CIIU Rev 4 (4 Dígitos)
-    cw_ciiu_rev_2_ciiu_rev_4 = pl.read_delta("datos/ciiu-rev-2_to_ciiu-rev-4")
+    cw_ciiu_rev_2_ciiu_rev_4 = load_table("diccionarios", "ciiu-rev-2_to_ciiu-rev-4")
 
     ## Calculamos el peso relativo de la actividad CIIU Rev 4 (4 Dígitos) en las correspondencias totales de actividades CIIU Rev 2 (3 Digitos) para posteriormente usarlas como pesos en el cálculo de la media ponderada de la actividad
     cw_ciiu_rev_2_ciiu_rev_4 = cw_ciiu_rev_2_ciiu_rev_4.with_columns(
@@ -789,7 +819,7 @@ def _(pl):
     )
 
     ## Cargamos Datos de Institutional Intensity en CIIU Rev 2 (3 Digitos)
-    inst_intensity = pl.read_delta("datos/institutional_intensity")
+    inst_intensity = load_table("viabilidad_atractivo", "institutional_intensity")
 
     ### Reunimos el valor de institutional intensity y el crosswalk CIIU-Rev-2-CIIU-Rev-4
     ### y calculamos la media ponderada por industria CIIU
@@ -1129,16 +1159,16 @@ def _(factores_imputados, pl, pref_atractivo, pref_viabilidad):
 
 
 @app.cell
-def _(pd, pl):
+def _(load_table, pd, pl):
     # Cargamos recodificación
-    recod = pl.read_delta("datos/catalogo_ciiu_rev4_nombres").to_pandas()
+    recod = load_table("diccionarios", "catalogo_ciiu_rev4_nombres").to_pandas()
 
     ## Diccionario CIIU 4 a nombres
     mapp_ciiu = pl.from_pandas(recod.query("clasificador=='ciiu_rev_4'")[["codigo", "nombre_actividad"]])
 
     ### Cargamos selección de industrias de Pedro
     ciiu_pedro_2 = pl.from_pandas(
-        pl.read_delta("datos/catalogo_ciiu_rev4").to_pandas().query("incluye==1")
+        load_table("diccionarios", "catalogo_ciiu_rev4").to_pandas().query("incluye==1")
     )
 
     ### Resultados finales Intensivo
@@ -1426,10 +1456,10 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table, pl):
     # Cargamos productos seleccionados de Textiles
-    textiles = pl.read_delta(
-                    "datos/productos_textiles"
+    textiles = load_table(
+                    "viabilidad_atractivo", "productos_textiles"
                 ).with_columns(
                     pl.col("HS12").cast(pl.String)
                 ).rename(
@@ -1440,9 +1470,9 @@ def _(pl):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     # Cargamos CW de productos textiles
-    cw_textiles = pl.read_delta("datos/productos_textiles_cw_hs12_ciiu4")
+    cw_textiles = load_table("viabilidad_atractivo", "productos_textiles_cw_hs12_ciiu4")
     cw_textiles
     return (cw_textiles,)
 
@@ -1996,9 +2026,9 @@ def _(textiles_scores_viabilidad_atractivo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ## Cargamos productos HS12
-    productos_hs12 = pl.read_delta("datos/product_hs12")
+    productos_hs12 = load_table("complejidad", "product_hs12")
     productos_hs12
     return (productos_hs12,)
 

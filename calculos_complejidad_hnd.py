@@ -48,8 +48,40 @@ def _():
     import altair as alt
     from great_tables import GT, html
     import polars.selectors as cs
+    from pyiceberg.catalog import load_catalog
 
-    return alt, cs, ecomplexity, np, pd, pl, plt, proximity
+
+    return alt, cs, ecomplexity, load_catalog, np, pd, pl, plt, proximity
+
+
+@app.cell
+def _(load_catalog):
+    ### Instancia Catálogo
+    warehouse_path = "warehouse"
+
+    catalog = load_catalog(
+        "default",
+        **{
+            'type': 'sql',
+            "uri": f"sqlite:///{warehouse_path}/pyiceberg_catalog.db",
+            "warehouse": f"{warehouse_path}",
+        },
+    )
+
+    return (catalog,)
+
+
+@app.cell
+def _(catalog, pl):
+    ### Función que carga tabla de Apache Iceberg
+    def load_table(
+        namespace : str, 
+        table : str
+        ) -> pl.DataFrame:
+        return catalog.load_table(f"{namespace}.{table}").to_polars().collect()
+
+
+    return (load_table,)
 
 
 @app.cell(hide_code=True)
@@ -81,12 +113,17 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
-    ### Define consulta tipo lazy para el acceso a los datos
-    q = pl.scan_delta('datos/ocde_sbs').filter(pl.col("Measure")=='Employees').select("REF_AREA", "ACTIVITY", "SIZE_CLASS", "OBS_VALUE", "TIME_PERIOD")
+def _(catalog, pl):
+    ### Cargamos datos de OCDE SBS
+    ocde_sbs = catalog.load_table("complejidad.ocde_sbs")
 
-    ### Recolectamos la informacion
-    df = q.collect()
+    df = pl.scan_iceberg(
+                ocde_sbs
+            ).filter(
+                pl.col("Measure")=='Employees'
+            ).select(
+                "REF_AREA", "ACTIVITY", "SIZE_CLASS", "OBS_VALUE", "TIME_PERIOD"
+            ).collect()
 
     ### Lo convertimos a pandas
     df = df.to_pandas()
@@ -310,10 +347,10 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table):
     ### Cargamos selección de industrias 
-    ciiu_pedro = pl.read_delta(
-                    "datos/catalogo_ciiu_rev4"
+    ciiu_pedro = load_table(
+                    "diccionarios", "catalogo_ciiu_rev4"
                     ).to_pandas().query("incluye==1")[
                         ["clase_codigo", "clase_titulo"]
                     ]
@@ -350,17 +387,17 @@ def _(mo):
 
 
 @app.cell
-def _(df, pl):
+def _(df, load_table, pl):
     ### Consulta para verificar la cantidad de actividades en 2019 con valores mayores a 0
     ### CONSIDERANDO ACTIVIDADES TRANSABLES
     # Cargamos recodificación
-    recod = pl.read_delta("datos/catalogo_ciiu_rev4_nombres").to_pandas()
+    recod = load_table("diccionarios", "catalogo_ciiu_rev4_nombres").to_pandas()
 
     ## Diccionario CIIU 4 a nombres
     mapp_ciiu = pl.from_pandas(recod.query("clasificador=='ciiu_rev_4'")[["codigo", "nombre_actividad"]].astype(str))
 
     # Cargamos transables 
-    transables = pl.read_delta("datos/actividades_transables").to_pandas().query("razon_emp_transables > 0")
+    transables = load_table("complejidad", "actividades_transables").to_pandas().query("razon_emp_transables > 0")
 
     recod = recod[recod["codigo_nuevo"].isin(transables["actividad"])]
     ciiu_transable = recod.query("clasificador =='ciiu_rev_4'")["codigo"].unique()
@@ -439,8 +476,8 @@ def _(
     ciiu_transable,
     df,
     df_actividades_transables,
+    load_table,
     pd,
-    pl,
 ):
     ### Haremos el análisis de complejidad modificando la muestra de paises de acuerdo al umbral de la razón de actividades que reportan empleo vs total de actividades transables
 
@@ -478,17 +515,17 @@ def _(
     muestra_actividades = list(insumos_complejidad["ACTIVITY"].unique())
 
     ### Cargamos Honduras
-    hnd = pl.read_delta("datos/empleo_honduras_2019").to_pandas()
+    hnd = load_table("complejidad", "empleo_honduras_2019").to_pandas()
     hnd["ACTIVITY"] = hnd["ACTIVITY"].apply(lambda x : f"{x:04}")
     hnd = hnd.query(f"ACTIVITY in {muestra_actividades}")
 
     ### Cargamos a El Salvador
-    slv = pl.read_delta("datos/empleo_slv_2019").to_pandas()
+    slv = load_table("complejidad", "empleo_slv_2019").to_pandas()
     slv["ACTIVITY"] = slv["ACTIVITY"].astype(str)
     slv = slv.query(f"ACTIVITY in {muestra_actividades}")
 
     ### Cargamos a Ecuador
-    ecu = pl.read_delta("datos/empleo_ecuador_2019").to_pandas()
+    ecu = load_table("complejidad", "empleo_ecuador_2019").to_pandas()
     ecu["ACTIVITY"] = ecu["ACTIVITY"].astype(str)
     ecu = ecu.query(f"ACTIVITY in {muestra_actividades}")
 
@@ -649,15 +686,15 @@ def _(mo):
 
 
 @app.cell
-def _(anio_analisis, pl):
+def _(anio_analisis, load_table):
     ## Cargamos GDP
-    gdp = pl.read_delta("datos/gdp_mmm_usd").to_pandas().query(f"Year=={anio_analisis}")
+    gdp = load_table("complejidad", "gdp_mmm_usd").to_pandas().query(f"Year=={anio_analisis}")
 
     ## Cargamos poblacion rural
-    pob_rural = pl.read_delta("datos/population_gnrl_rural").to_pandas().query(f"Year=={anio_analisis}")
+    pob_rural = load_table("complejidad", "population_gnrl_rural").to_pandas().query(f"Year=={anio_analisis}")
 
     ## Cargamos poblacion urbana
-    pob_urbana = pl.read_delta("datos/population_gnrl_urban").to_pandas().query(f"Year=={anio_analisis}")
+    pob_urbana = load_table("complejidad", "population_gnrl_urban").to_pandas().query(f"Year=={anio_analisis}")
 
     ## Reunimos población
     pob = pob_rural.merge(
@@ -760,9 +797,9 @@ def _(mo):
 
 
 @app.cell
-def _(pl):
+def _(load_table, pl):
     ### Carga datos del atlas del ranking
-    atlas = pl.read_delta("datos/growth_proj_eci_rankings").filter(
+    atlas = load_table("complejidad", "growth_proj_eci_rankings").filter(
         pl.col("year") == 2019
     )
     atlas
@@ -1313,7 +1350,7 @@ def _(mo):
 
 
 @app.cell
-def _(alt, cdata, mapp_ciiu, pl):
+def _(alt, cdata, load_table, mapp_ciiu, pl):
     cdata_intensivo = cdata.filter(
         (pl.col("REF_AREA") == "HND") & 
         (pl.col("rca") > 0) & 
@@ -1324,7 +1361,7 @@ def _(alt, cdata, mapp_ciiu, pl):
         y=alt.datum(-1.14)
     )
 
-    ciiu_textil = pl.read_delta("datos/catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
+    ciiu_textil = load_table("diccionarios", "catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
 
     ciiu_textil["clase_codigo"] = ciiu_textil["clase_codigo"].apply(lambda x: f"{x:04}")
 
@@ -1469,7 +1506,7 @@ def _(mo):
 
 
 @app.cell
-def _(cdata_norm, mapp_portafolios, obten_ranking, pl):
+def _(cdata_norm, load_table, mapp_portafolios, obten_ranking, pl):
     def agrega_col(df, columna): 
         return df.with_columns(
             portafolio=pl.lit(columna)
@@ -1491,7 +1528,7 @@ def _(cdata_norm, mapp_portafolios, obten_ranking, pl):
         ]  
     )
 
-    ciiu_secciones = pl.read_delta("datos/catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
+    ciiu_secciones = load_table("diccionarios", "catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
 
     ciiu_secciones["clase_codigo"] = ciiu_secciones["clase_codigo"].apply(lambda x: f"{x:04}")
 
@@ -1509,9 +1546,9 @@ def _(cdata_norm, mapp_portafolios, obten_ranking, pl):
 
 
 @app.cell
-def _(cdata_norm, pl):
+def _(cdata_norm, load_table, pl):
     ### Preparamos df para visualizacion
-    ciiu_actividades = pl.read_delta("datos/catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
+    ciiu_actividades = load_table("diccionarios", "catalogo_ciiu_rev4").to_pandas().query("incluye == 1")
 
     ciiu_actividades["clase_codigo"] = ciiu_actividades["clase_codigo"].apply(lambda x: f"{x:04}")
 
