@@ -1,0 +1,7 @@
+name : importaciones_usa_china_hs12
+longname :  Tabla de productos (HS12) y su razón de importación de USA proveniente de China.  
+url: https://atlas.hks.harvard.edu/data-downloads
+namespace: viabilidad_atractivo
+assumptions: >
+  Tabla de productos (HS12) y su razón de importación de USA proveniente de China. 
+  

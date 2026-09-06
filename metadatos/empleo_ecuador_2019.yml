@@ -1,0 +1,6 @@
+name : empleo_ecuador_2019
+longname :  Tabla de Empleo de Ecuador por actividad CIIU Rev 4 para el año 2019
+url:  https://anda.inec.gob.ec/anda5/index.php/catalog/1281
+namespace: complejidad
+assumptions: >
+  Tabla de Empleo de Ecuador por actividad CIIU Rev 4 para el año 2019

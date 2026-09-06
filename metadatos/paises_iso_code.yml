@@ -1,0 +1,6 @@
+name : paises_iso_code
+longname : Diccionario de nombres de paises por ISO CODE 3
+url:  NA
+namespace: diccionarios
+assumptions: >
+  Diccionario de nombres de paises por ISO CODE 3

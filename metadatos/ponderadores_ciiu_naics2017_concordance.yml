@@ -1,0 +1,6 @@
+name : ponderadores_ciiu_naics2017_concordance
+longname :  Correspondencia CIIU Rev 4-NAICS 2017
+url:  https://github.com/insongkim/concordance
+namespace: diccionarios
+assumptions: >
+  Correspondencia CIIU Rev 4-NAICS 2017

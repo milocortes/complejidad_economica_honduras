@@ -1,0 +1,7 @@
+name : hs12_country_product_year_4
+longname : International Trade Data (HS12) (Unilateral Trade, HS12, 4 digit, 2012-2024)
+url:  https://atlas.hks.harvard.edu/data-downloads
+namespace: complejidad
+assumptions: >
+  This dataset contains information about International Trade Data (HS12). 
+  It includes data from 2012-2024 and is classified as Unilateral Trade with HS12 classification at the 4-digit level.

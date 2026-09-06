@@ -1,0 +1,12 @@
+name : oecd_sbp_produccion_gasto_insumos
+longname : Structural business statistics by size class and economic activity (ISIC Rev. 4). Datos de Empleo y Producción por actividad económica.
+url:  https://data-explorer.oecd.org/vis?tm=DF_SDBS_ISIC4&snb=1&df[ds]=dsDisseminateFinalDMZ&df[id]=DSD_SDBSBSC_ISIC4%40DF_SDBS_ISIC4&df[ag]=OECD.SDD.TPS&df[vs]=1.0&dq=A..ENTR%2BTUTT.C._T%2BS1T249%2BS_GE250.&pd=2018,&to[TIME_PERIOD]=false
+namespace: complejidad
+assumptions: >
+  The OECD Secretariat collects a wide range of statistics on businesses and business activity. The Structural Business Statistics by size class dataset is part of the Structural and Demographic Business Statistics (SDBS) database featuring the harmonised data collection of the OECD Statistics and Data Directorate relating to a number of key variables, such as value added, operating surplus, employment, and the number of business units.
+
+  Data are broken down to class (4-digit) level of International Standard of Industrial Classification (ISIC Revision 4), and by enterprise size class based on the number of persons employed.
+
+  Data cover OECD member, accession and partner countries, non-OECD countries that are members of the European Statistical System who provide data to Eurostat, as well as countries participating in OECD Regional initiatives.
+
+  Users are encouraged to send their questions and observations regarding this database to STAT.Contact@oecd.org

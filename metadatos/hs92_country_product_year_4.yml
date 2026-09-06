@@ -1,0 +1,7 @@
+name : hs92_country_product_year_4
+longname : International Trade Data (HS92) (Unilateral Trade, HS92, 4 digit, 1995-2024)
+url: https://atlas.hks.harvard.edu/data-downloads
+namespace: complejidad
+assumptions: >
+  This dataset contains information about International Trade Data (HS92). 
+  It includes data from 1995-2024 and is classified as Unilateral Trade with HS92 classification at the 4-digit level.

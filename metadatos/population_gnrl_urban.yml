@@ -1,0 +1,6 @@
+name : population_gnrl_urban
+longname : Urban Population
+url:  https://data.worldbank.org/indicator/SP.URB.TOTL
+namespace: complejidad
+assumptions: >
+  Urban Population

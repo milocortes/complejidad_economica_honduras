@@ -1,0 +1,6 @@
+name : ponderadores_ciiu_hs12_concordance
+longname :  Correspondencia CIIU Rev 4-HS12
+url:  https://github.com/insongkim/concordance
+namespace: diccionarios
+assumptions: >
+  Correspondencia CIIU Rev 4-HS12

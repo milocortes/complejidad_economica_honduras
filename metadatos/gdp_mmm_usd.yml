@@ -1,0 +1,8 @@
+name : gdp_mmm_usd
+longname :  GDP in billions of USD
+url:  https://data.worldbank.org/indicator/NY.GDP.MKTP.KD
+namespace: complejidad
+assumptions: >
+  Country official statistics, National Statistical Organizations and/or Central Banks; 
+  National Accounts data files, Organisation for Economic Co-operation and Development ( OECD ); 
+  Staff estimates, World Bank ( WB )

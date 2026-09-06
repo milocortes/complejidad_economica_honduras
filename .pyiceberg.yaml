@@ -2,6 +2,4 @@ catalog:
   default:
     type: sql
     uri: sqlite:///warehouse/pyiceberg_catalog.db
-    warehouse: warehouse
-    #init_catalog_tables: false
-    
+    warehouse: file://warehouse

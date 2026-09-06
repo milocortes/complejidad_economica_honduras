@@ -384,7 +384,13 @@ def _(df, pl):
     df_actividades_transables["ACTIVITY"] = df_actividades_transables["ACTIVITY"]/len(ciiu_transable)
 
     df_actividades_transables
-    return ciiu_transable, df_actividades_transables, mapp_ciiu
+    return ciiu_transable, df_actividades_transables, mapp_ciiu, recod
+
+
+@app.cell
+def _(recod):
+    recod
+    return
 
 
 @app.cell(hide_code=True)

@@ -1,0 +1,6 @@
+name : product_hs12
+longname :  Classifications Data (Classifications, HS12, various years)
+url: https://atlas.hks.harvard.edu/data-downloads
+namespace: complejidad
+assumptions: >
+  This dataset contains information about Classifications Data. It includes data from various years and is classified as Classifications with HS12 classification.

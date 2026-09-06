@@ -1,0 +1,11 @@
+name : actividades_transables
+longname : Tabla de Actividades Transables
+url:  https://www.nber.org/system/files/working_papers/w20375/w20375.pdf
+namespace: complejidad
+assumptions: >
+  La tabla de actividades transables fue construida al usar la clasificación de industrias transables de Delgado et al (2016).
+  
+  Se construyó una razón de empresas transables dentro de la clasificación CIIU considerando las industrias transables NAICS que integran a la actividad CIIU.
+  
+  Referencias:
+    - Delgado, M., Porter, M. E., & Stern, S. (2016). Defining clusters of related industries. Journal of Economic Geography, 16(1), 1-38.

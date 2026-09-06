@@ -1,0 +1,7 @@
+name : growth_proj_eci_rankings
+longname :  Growth Projections and Complexity Rankings (Rankings, HS92/HS12/SITC, 1995-2024)
+url:  https://atlas.hks.harvard.edu/data-downloads
+namespace: complejidad
+assumptions: >
+  This dataset contains information about Growth Projections and Complexity Rankings. 
+  It includes data from 1995-2024 and is classified as Rankings with HS92/HS12/SITC classification.

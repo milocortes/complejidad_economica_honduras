@@ -1,0 +1,6 @@
+name : population_gnrl_rural
+longname :  Rural Population
+url:  https://data.worldbank.org/indicator/SP.RUR.TOTL
+namespace: complejidad
+assumptions: >
+  Rural Population

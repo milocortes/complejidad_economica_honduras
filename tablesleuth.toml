@@ -1,0 +1,8 @@
+[catalog]
+default = "default"      # Use local SQLite catalog
+
+[gizmosql]
+uri = "grpc+tls://localhost:31337"
+username = "gizmosql_username"
+password = "gizmosql_password"
+tls_skip_verify = true

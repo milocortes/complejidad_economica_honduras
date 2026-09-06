@@ -1,0 +1,7 @@
+name : electricidad_saic_2003-2023
+longname :  Tabla de consumo de energia eléctrica por rama SCIAN 2023.
+url: https://www.inegi.org.mx/app/saic/
+namespace: viabilidad_atractivo
+assumptions: >
+  Tabla de consumo de energia eléctrica por rama SCIAN 2023. 
+  Fuente : INEGI

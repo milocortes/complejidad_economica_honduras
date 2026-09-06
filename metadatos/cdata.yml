@@ -1,0 +1,6 @@
+name : cdata
+longname :  Resultados de los Cálculos de Complejidad
+url:  Cálculos propios
+namespace: complejidad
+assumptions: >
+  Resultados de los Cálculos de Complejidad

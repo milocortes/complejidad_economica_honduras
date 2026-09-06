@@ -8,6 +8,7 @@ dependencies = [
     "altair[all]>=6.2.2",
     "ecomplexity>=0.5.3",
     "marimo>=0.24.0",
+    "nicegui>=3.16.0",
     "polars[all]>=1.44.1",
     "pyiceberg[sql-sqlite]>=0.12.0",
     "pymcdm>=1.4.0",

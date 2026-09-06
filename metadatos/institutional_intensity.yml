@@ -1,0 +1,8 @@
+name : institutional_intensity
+longname : Intensidad Institucional
+url: https://academic.oup.com/jleo/article-abstract/29/5/1145/976572
+namespace: viabilidad_atractivo
+assumptions: >
+  La intensidad institucional es la proporción de insumos intermedios que no pueden adquirirse en mercados organizados y que no tienen un precio de referencia.
+
+  Fuente : Levchenko, A. A. (2013). International trade and institutional change. The Journal of Law, Economics, & Organization, 29(5), 1145-1181..
