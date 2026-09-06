@@ -1166,8 +1166,8 @@ def _(load_table, pd, pl):
     ## Diccionario CIIU 4 a nombres
     mapp_ciiu = pl.from_pandas(recod.query("clasificador=='ciiu_rev_4'")[["codigo", "nombre_actividad"]])
 
-    ### Cargamos selección de industrias de Pedro
-    ciiu_pedro_2 = pl.from_pandas(
+    ### Cargamos selección de industrias
+    ciiu_industrias = pl.from_pandas(
         load_table("diccionarios", "catalogo_ciiu_rev4").to_pandas().query("incluye==1")
     )
 
@@ -1179,7 +1179,7 @@ def _(load_table, pd, pl):
     #resultados_finales_extensivo = pd.read_excel("datos/viabilidad_atractivo/Resultados Complexity_final.xlsx", sheet_name="Extensivo")
     resultados_finales_extensivo = pd.read_excel("datos/seleccion_final_complexity.xlsx", sheet_name="extensivo")
     return (
-        ciiu_pedro_2,
+        ciiu_industrias,
         mapp_ciiu,
         resultados_finales_extensivo,
         resultados_finales_intensivo,
@@ -1203,7 +1203,7 @@ def _(mo):
 @app.cell
 def _(
     cdata_hnd,
-    ciiu_pedro_2,
+    ciiu_industrias,
     mapp_ciiu,
     pd,
     pl,
@@ -1233,7 +1233,7 @@ def _(
         left_on="ACTIVITY", 
         right_on="codigo"
     ).join(
-        ciiu_pedro_2.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
+        ciiu_industrias.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
         left_on= "ACTIVITY", 
         right_on = "clase_codigo"
     )
@@ -1329,7 +1329,7 @@ def _(mo):
 def _(
     alt,
     cdata_hnd,
-    ciiu_pedro_2,
+    ciiu_industrias,
     color_cat,
     color_hexa,
     mapp_ciiu,
@@ -1348,7 +1348,7 @@ def _(
         left_on="ACTIVITY", 
         right_on="codigo"
     ).join(
-        ciiu_pedro_2.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
+        ciiu_industrias.select("clase_codigo", "clase_titulo", "seccion_codigo", "seccion_titulo", "division_titulo"),
         left_on= "ACTIVITY", 
         right_on = "clase_codigo"
     )

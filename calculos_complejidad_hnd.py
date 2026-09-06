@@ -67,7 +67,6 @@ def _(load_catalog):
             "warehouse": f"{warehouse_path}",
         },
     )
-
     return (catalog,)
 
 
@@ -333,7 +332,7 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    Este bloque carga una selección depurada de actividades económicas desde el archivo `datos/recodificacion/seleccion_pedro.csv`. La base se filtra para conservar únicamente las clases marcadas con `incluye == 1`, y se mantienen las variables `clase_codigo` y `clase_titulo`.
+    Este bloque carga una selección depurada de actividades económicas desde la tabla `diccionarios.catalogo_ciiu_rev4`. La base se filtra para conservar únicamente las clases marcadas con `incluye == 1`, y se mantienen las variables `clase_codigo` y `clase_titulo`.
 
     Esta selección excluye actividades con baja comparabilidad entre países. En particular, se retiran actividades que aparecen listadas únicamente en la información de Honduras o actividades reportadas por un número muy reducido de países de la OCDE. Con ello, se define un universo de clases CIIU más consistente para el análisis comparativo. Debido a lo anterior, salen del análisis las secciones: A, B (parcialmente), K, O, P, Q, R, S (parcialmente), T y U.
 
@@ -349,19 +348,19 @@ def _(mo):
 @app.cell
 def _(load_table):
     ### Cargamos selección de industrias 
-    ciiu_pedro = load_table(
+    ciiu_industrias_seleccionadas = load_table(
                     "diccionarios", "catalogo_ciiu_rev4"
                     ).to_pandas().query("incluye==1")[
                         ["clase_codigo", "clase_titulo"]
                     ]
     ### Formato de clave ciiu 04d
-    ciiu_pedro["clase_codigo"] = ciiu_pedro["clase_codigo"].apply(lambda x : f"{x:04}")
+    ciiu_industrias_seleccionadas["clase_codigo"] = ciiu_industrias_seleccionadas["clase_codigo"].apply(lambda x : f"{x:04}")
 
     ### Lista de Actividades CIIU a considerar
-    ciiu_seleccion_pedro = ciiu_pedro["clase_codigo"].to_list()
+    ciiu_seleccion = ciiu_industrias_seleccionadas["clase_codigo"].to_list()
 
-    ciiu_pedro
-    return (ciiu_seleccion_pedro,)
+    ciiu_industrias_seleccionadas
+    return (ciiu_seleccion,)
 
 
 @app.cell(hide_code=True)
@@ -472,7 +471,7 @@ def _(mo):
 
 @app.cell
 def _(
-    ciiu_seleccion_pedro,
+    ciiu_seleccion,
     ciiu_transable,
     df,
     df_actividades_transables,
@@ -498,8 +497,8 @@ def _(
                     df
                         # Filtra periodo de análisis
                         .query(f"TIME_PERIOD == {anio_analisis}")
-                        # Filta selección de Pedro
-                        .query(f"ACTIVITY in {ciiu_seleccion_pedro}")
+                        # Filtra selección
+                        .query(f"ACTIVITY in {ciiu_seleccion}")
                         # Filtra por actividades transables
                         .query(f"ACTIVITY in {ciiu_transable}")
                         # Filtra países muestra
@@ -1498,7 +1497,7 @@ def _(mo):
 
     Para cada portafolio definido en `mapp_portafolios`, se ejecuta `obten_ranking()` usando como insumo `cdata_norm`. Los resultados se renombran a una estructura común con las columnas `ranking`, `clase_codigo` y `clase_titulo`. Esta estandarización permite concatenar los rankings de todas las estrategias en una única tabla.
 
-    Posteriormente, se carga la selección depurada de actividades desde `seleccion_pedro.csv`, conservando únicamente las actividades incluidas en el análisis. Los códigos CIIU se formatean a cuatro dígitos para garantizar consistencia en los cruces. De esta tabla se extraen las variables `seccion_codigo` y `seccion_titulo`, que identifican la sección económica de cada actividad.
+    Posteriormente, se carga la selección depurada de actividades desde la tabla `diccionarios.catalogo_ciiu_rev4`, conservando únicamente las actividades incluidas en el análisis. Los códigos CIIU se formatean a cuatro dígitos para garantizar consistencia en los cruces. De esta tabla se extraen las variables `seccion_codigo` y `seccion_titulo`, que identifican la sección económica de cada actividad.
 
     Finalmente, la tabla `portafolios` se cruza con la información sectorial mediante `clase_codigo`. El resultado es una base consolidada que permite comparar las actividades priorizadas por cada estrategia de portafolio junto con su posición en el ranking y su clasificación económica.
     """)
