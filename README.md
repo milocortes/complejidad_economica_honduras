@@ -6,7 +6,7 @@ Repositorio de la Identificación de Industrias para Honduras
 Para descargar el repositorio utiliza la instrucción:
 
 ```
-https://github.com/milocortes/complejidad_economica_honduras.git
+git clone https://github.com/milocortes/complejidad_economica_honduras.git
 ```
 ## Precondiciones de ejecución
 El proyecto utiliza [uv](https://docs.astral.sh/uv/) como administrador de proyectos y paquetes. En la siguiente [liga](https://docs.astral.sh/uv/getting-started/installation/) se encuentra los metodos de instalación de uv para los sistemas operativos Windows, macOS y Linux.
@@ -23,7 +23,7 @@ uv sync
 
 > [!NOTE]
 >
->Sincronizar (Syncing) es el proceso de instalar las versiones correctas de las dependencias de un lockfile en el ambiente del proyecto.
+>Sincronizar es el proceso de instalar las versiones correctas de las dependencias de un lockfile en el ambiente del proyecto.
 
 ## Replicación de programas
 
