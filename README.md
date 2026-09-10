@@ -73,6 +73,12 @@ Para consultar los metadatos de una tabla en un namespace, usa la instrucción:
 uv run pyiceberg describe complejidad.ocde_sbs
 ```
 
+### Inspección de Metadatos de Tablas
+Ejecuta la siguiente instrucción para abrir en el navegador una herramienta para visualizar e inspeccionar los metadatos de las tablas:
+```bash 
+uv run python gui.py
+```
+
 ### Inspección de Tablas con [TableSleuth](https://tablesleuth.com/)
 
 [TableSleuth](https://tablesleuth.com/) es una herramienta para analizar la estructura de archivos, metadatos, evolución de tablas, etc, para Apache Iceberg.
