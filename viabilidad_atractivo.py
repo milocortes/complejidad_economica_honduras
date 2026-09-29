@@ -2231,6 +2231,12 @@ def _(
             )
     )
     plot_textiles
+    return (textiles_topsis,)
+
+
+@app.cell
+def _(textiles_topsis):
+    textiles_topsis
     return
 
 
