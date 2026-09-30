@@ -39,6 +39,12 @@ Para replicar el programa de cálculos de los factores de viabilidad y atractivo
 uv run marimo edit viabilidad_atractivo.py
 ```
 
+Para replicar el programa que genera los treemap de empleo ejecuta la siguiente instrucción:
+
+```bash 
+uv run marimo edit treemaps_empleo.py
+```
+
 ## Catálogo de datos
 El proyecto utiliza [Apache Iceberg](https://iceberg.apache.org/) como formato de almacenamiento de tablas. Apache Iceberg define la organización, versionamiento y acceso a un data lake. No cambia la forma como los datos son almacenados a nivel de archivo. En su lugar, agrega una capa de metadatos sobre archivos almacenados (tipicamente en formato Parquet) lo que permite tratar conjuntos de archivos como tablas relacionales coherentes, manteniéndolos al mismo tiempo en almacenamiento de objetos de bajo coste.
 
